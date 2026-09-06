@@ -1,0 +1,369 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	objectVersion = 56;
+	classes = {
+	};
+	objects = {
+
+/* Begin PBXBuildFile section */
+		1000000100 /* ScheduleAssistantApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000100; };
+		1000000101 /* ParsedEvent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000101; };
+		1000000102 /* LLMProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000102; };
+		1000000103 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000103; };
+		1000000104 /* SpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000104; };
+		1000000107 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000107; };
+		1000000110 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000110; };
+		1000000111 /* ChatStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000111; };
+		1000000112 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000112; };
+		1000000113 /* MessageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000113; };
+		1000000114 /* EventDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000114; };
+		1000000115 /* SideDrawerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000115; };
+		1000000116 /* IconService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000116; };
+		1000000118 /* ScheduleListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000118; };
+		1000000119 /* UsageGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000119; };
+		1000000117 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2000000117; };
+		1000000120 /* OrbitViolet.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000120; };
+		1000000121 /* OrbitViolet@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000121; };
+		1000000122 /* OrbitGreen.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000122; };
+		1000000123 /* OrbitGreen@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000123; };
+		1000000124 /* OrbitOrange.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000124; };
+		1000000125 /* OrbitOrange@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000125; };
+		1000000126 /* OrbitMono.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000126; };
+		1000000127 /* OrbitMono@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000127; };
+		1000000128 /* OrbitPink.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000128; };
+		1000000129 /* OrbitPink@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000129; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		2000000100 /* ScheduleAssistantApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAssistantApp.swift; sourceTree = "<group>"; };
+		2000000101 /* ParsedEvent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParsedEvent.swift; sourceTree = "<group>"; };
+		2000000102 /* LLMProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LLMProvider.swift; sourceTree = "<group>"; };
+		2000000103 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
+		2000000104 /* SpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechService.swift; sourceTree = "<group>"; };
+		2000000107 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		2000000110 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		2000000111 /* ChatStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatStore.swift; sourceTree = "<group>"; };
+		2000000112 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		2000000113 /* MessageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageViews.swift; sourceTree = "<group>"; };
+		2000000114 /* EventDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailSheet.swift; sourceTree = "<group>"; };
+		2000000115 /* SideDrawerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SideDrawerView.swift; sourceTree = "<group>"; };
+		2000000116 /* IconService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IconService.swift; sourceTree = "<group>"; };
+		2000000118 /* ScheduleListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleListView.swift; sourceTree = "<group>"; };
+		2000000119 /* UsageGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UsageGuideView.swift; sourceTree = "<group>"; };
+		2000000117 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2000000120 /* OrbitViolet.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = OrbitViolet.png; sourceTree = "<group>"; };
+		2000000121 /* OrbitViolet@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "OrbitViolet@3x.png"; sourceTree = "<group>"; };
+		2000000122 /* OrbitGreen.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = OrbitGreen.png; sourceTree = "<group>"; };
+		2000000123 /* OrbitGreen@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "OrbitGreen@3x.png"; sourceTree = "<group>"; };
+		2000000124 /* OrbitOrange.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = OrbitOrange.png; sourceTree = "<group>"; };
+		2000000125 /* OrbitOrange@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "OrbitOrange@3x.png"; sourceTree = "<group>"; };
+		2000000126 /* OrbitMono.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = OrbitMono.png; sourceTree = "<group>"; };
+		2000000127 /* OrbitMono@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "OrbitMono@3x.png"; sourceTree = "<group>"; };
+		2000000128 /* OrbitPink.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = OrbitPink.png; sourceTree = "<group>"; };
+		2000000129 /* OrbitPink@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "OrbitPink@3x.png"; sourceTree = "<group>"; };
+		2000000108 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		3000000000 /* ScheduleAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScheduleAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		4000000000 = {
+			isa = PBXGroup;
+			children = (
+				4000000001 /* ScheduleAssistant */,
+				4000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4000000001 /* ScheduleAssistant */ = {
+			isa = PBXGroup;
+			children = (
+				4000000002 /* Sources */,
+				4000000004 /* AlternateIcons */,
+				2000000117 /* Assets.xcassets */,
+				2000000108 /* Info.plist */,
+			);
+			path = ScheduleAssistant;
+			sourceTree = "<group>";
+		};
+		4000000002 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				2000000100 /* ScheduleAssistantApp.swift */,
+				2000000101 /* ParsedEvent.swift */,
+				2000000102 /* LLMProvider.swift */,
+				2000000103 /* CalendarService.swift */,
+				2000000104 /* SpeechService.swift */,
+				2000000110 /* Models.swift */,
+				2000000111 /* ChatStore.swift */,
+				2000000112 /* ChatView.swift */,
+				2000000113 /* MessageViews.swift */,
+				2000000114 /* EventDetailSheet.swift */,
+				2000000115 /* SideDrawerView.swift */,
+				2000000116 /* IconService.swift */,
+				2000000118 /* ScheduleListView.swift */,
+				2000000119 /* UsageGuideView.swift */,
+				2000000107 /* SettingsView.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		4000000004 /* AlternateIcons */ = {
+			isa = PBXGroup;
+			children = (
+				2000000120 /* OrbitViolet.png */,
+				2000000121 /* OrbitViolet@3x.png */,
+				2000000122 /* OrbitGreen.png */,
+				2000000123 /* OrbitGreen@3x.png */,
+				2000000124 /* OrbitOrange.png */,
+				2000000125 /* OrbitOrange@3x.png */,
+				2000000126 /* OrbitMono.png */,
+				2000000127 /* OrbitMono@3x.png */,
+				2000000128 /* OrbitPink.png */,
+				2000000129 /* OrbitPink@3x.png */,
+			);
+			path = AlternateIcons;
+			sourceTree = "<group>";
+		};
+		4000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3000000000 /* ScheduleAssistant.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5000000000 /* ScheduleAssistant */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6000000000;
+			buildPhases = (
+				5000000100 /* Sources */,
+				5000000101 /* Frameworks */,
+				5000000102 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ScheduleAssistant;
+			productName = ScheduleAssistant;
+			productReference = 3000000000 /* ScheduleAssistant.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		7000000000 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+			};
+			buildConfigurationList = 6000000002;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				"zh-Hans",
+				Base,
+			);
+			mainGroup = 4000000000;
+			targets = (
+				5000000000 /* ScheduleAssistant */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5000000100 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1000000100 /* ScheduleAssistantApp.swift in Sources */,
+				1000000101 /* ParsedEvent.swift in Sources */,
+				1000000102 /* LLMProvider.swift in Sources */,
+				1000000103 /* CalendarService.swift in Sources */,
+				1000000104 /* SpeechService.swift in Sources */,
+				1000000110 /* Models.swift in Sources */,
+				1000000111 /* ChatStore.swift in Sources */,
+				1000000112 /* ChatView.swift in Sources */,
+				1000000113 /* MessageViews.swift in Sources */,
+				1000000114 /* EventDetailSheet.swift in Sources */,
+				1000000115 /* SideDrawerView.swift in Sources */,
+				1000000116 /* IconService.swift in Sources */,
+				1000000118 /* ScheduleListView.swift in Sources */,
+				1000000119 /* UsageGuideView.swift in Sources */,
+				1000000107 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5000000101 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5000000102 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1000000117 /* Assets.xcassets in Resources */,
+				1000000120 /* OrbitViolet.png in Resources */,
+				1000000121 /* OrbitViolet@3x.png in Resources */,
+				1000000122 /* OrbitGreen.png in Resources */,
+				1000000123 /* OrbitGreen@3x.png in Resources */,
+				1000000124 /* OrbitOrange.png in Resources */,
+				1000000125 /* OrbitOrange@3x.png in Resources */,
+				1000000126 /* OrbitMono.png in Resources */,
+				1000000127 /* OrbitMono@3x.png in Resources */,
+				1000000128 /* OrbitPink.png in Resources */,
+				1000000129 /* OrbitPink@3x.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		6000000100 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_KEY_CFBundleDisplayName = Orbit;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScheduleAssistant/Info.plist;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "用于选择目标日历并写入识别出的日程";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "用于将识别出的日程写入日历";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录入语音以识别日程";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择包含日程信息的图片";
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄包含日程信息的图片";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音转换为文字以识别日程";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.scheduleassistant;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Debug;
+		};
+		6000000101 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_KEY_CFBundleDisplayName = Orbit;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ScheduleAssistant/Info.plist;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "用于选择目标日历并写入识别出的日程";
+				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "用于将识别出的日程写入日历";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录入语音以识别日程";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择包含日程信息的图片";
+				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄包含日程信息的图片";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音转换为文字以识别日程";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIRequiresFullScreen = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.scheduleassistant;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Release;
+		};
+		6000000200 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_NS_ASSERTIONS = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Debug;
+		};
+		6000000201 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Developer";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				GCC_OPTIMIZATION_LEVEL = s;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6000000000 /* Build configuration list for PBXNativeTarget "ScheduleAssistant" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6000000100 /* Debug */,
+				6000000101 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6000000002 /* Build configuration list for PBXProject "ScheduleAssistant" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6000000200 /* Debug */,
+				6000000201 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 7000000000 /* Project object */;
+}

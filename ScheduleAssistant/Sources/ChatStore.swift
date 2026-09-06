@@ -1,0 +1,223 @@
+import Foundation
+import SwiftUI
+import UIKit
+
+/// 聊天数据与处理管线
+@MainActor
+final class ChatStore: ObservableObject {
+    @Published var messages: [ChatMessage] = []
+    @Published var isThinking = false
+    @Published var calendarAccessDenied = false
+
+    private let fileURL: URL
+
+    init() {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        fileURL = dir.appendingPathComponent("orbit-chat.json")
+        load()
+        if messages.isEmpty {
+            messages = [ChatMessage(
+                role: .assistant, kind: .text,
+                text: "你好，我是 Orbit 🪐\n所有计划，运行于时间轨道。\n告诉我你的安排，我来帮你写进日历——\n例如：下周三下午3点在门诊三楼开课题会"
+            )]
+        }
+    }
+
+    // MARK: - 持久化
+
+    private func load() {
+        guard let data = try? Data(contentsOf: fileURL),
+              let saved = try? JSONDecoder().decode([ChatMessage].self, from: data) else { return }
+        messages = saved
+    }
+
+    private func save() {
+        if let data = try? JSONEncoder().encode(messages) {
+            try? data.write(to: fileURL, options: .atomic)
+        }
+    }
+
+    // MARK: - 发送入口
+
+    func send(text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        messages.append(ChatMessage(role: .user, kind: .text, text: trimmed))
+        save()
+        process(text: trimmed, image: nil)
+    }
+
+    func send(image: UIImage) {
+        // 持久化用小缩略图；识别用可读版本
+        let thumb = Self.downscale(image, maxSide: 420)?.jpegData(compressionQuality: 0.5)
+        messages.append(ChatMessage(role: .user, kind: .image, text: "", imageData: thumb))
+        save()
+        process(text: nil, image: Self.downscale(image, maxSide: 900))
+    }
+
+    func send(voiceTranscript: String) {
+        send(text: voiceTranscript)
+    }
+
+    func retryLast() {
+        // 找最近一条用户消息重新识别
+        if let lastUser = messages.last(where: { $0.role == .user }) {
+            var img: UIImage?
+            if lastUser.kind == .image, let data = lastUser.imageData {
+                img = UIImage(data: data)
+            }
+            process(text: lastUser.kind == .text ? lastUser.text : nil, image: img)
+        }
+    }
+
+    // MARK: - 识别管线
+
+    private func process(text: String?, image: UIImage?) {
+        let settings = LLMSettings.shared
+        let provider = settings.activeProvider
+        let config = settings.config(for: provider)
+        isThinking = true
+        messages.append(ChatMessage(role: .assistant, kind: .text, text: "…"))
+        let thinkingIndex = messages.count - 1
+
+        Task {
+            do {
+                let events = try await provider.parseSchedule(text: text, image: image, config: config)
+                guard !events.isEmpty else {
+                    messages[thinkingIndex].text = "这段内容里我没找到日程信息，换个说法试试？例如：明天上午10点开会"
+                    isThinking = false
+                    save()
+                    return
+                }
+                var snapshots: [EventSnapshot] = []
+                for parsed in events {
+                    snapshots.append(try await writeAuto(parsed: parsed))
+                }
+                // 回复文案：单项详细说，多项汇总说
+                if snapshots.count == 1 {
+                    let snap = snapshots[0]
+                    let timePart = snap.isAllDay ? "" : " \(snap.start.shortTime)"
+                    let reminderPart = snap.reminderMinutes != nil ? "，会准时提醒您" : ""
+                    messages[thinkingIndex].text = "已安排《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(reminderPart)"
+                } else {
+                    let earliest = snapshots.min { $0.start < $1.start }!
+                    messages[thinkingIndex].text = "已识别 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)，全部已写入日历"
+                }
+                for snap in snapshots {
+                    messages.append(ChatMessage(role: .assistant, kind: .eventCard, event: snap))
+                }
+            } catch {
+                messages[thinkingIndex].text = "出错了：\(error.localizedDescription)\n可以点这里重试，或检查左上角的 API 设置"
+            }
+            isThinking = false
+            save()
+        }
+    }
+
+    /// 自动写入默认日历；权限或日历不可用时降级为未写入卡片
+    private func writeAuto(parsed: ParsedEvent) async throws -> EventSnapshot {
+        let status = await CalendarService.shared.ensureAccess()
+        guard status == .fullAccess || status == .writeOnly else {
+            calendarAccessDenied = true
+            throw NSError(domain: "orbit", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "日历权限未开启：设置 → Orbit → 日历 → 完全访问"])
+        }
+        let calendars = CalendarService.shared.availableCalendars()
+        let preferred = calendars.first { $0.calendarIdentifier == AppSettings.shared.defaultCalendarId } ?? calendars.first
+        guard let calendar = preferred else {
+            throw NSError(domain: "orbit", code: 2,
+                          userInfo: [NSLocalizedDescriptionKey: "没有可写入的日历，请在系统日历中确认已登录账户"])
+        }
+        let start = parsed.resolvedStartDate ?? Date()
+        let end: Date
+        if parsed.isAllDay == true {
+            end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: start)) ?? start
+        } else {
+            end = parsed.resolvedEndDate ?? start.addingTimeInterval(3600)
+        }
+        var snapshot = EventSnapshot(
+            title: parsed.title,
+            emoji: parsed.emoji ?? "📅",
+            start: start, end: end,
+            isAllDay: parsed.isAllDay ?? false,
+            location: parsed.location,
+            notes: parsed.notes,
+            reminderMinutes: AppSettings.shared.defaultReminderMinutes,
+            calendarIdentifier: calendar.calendarIdentifier,
+            calendarTitle: calendar.title
+        )
+        snapshot.eventIdentifier = CalendarService.shared.createEvent(snapshot)
+        return snapshot
+    }
+
+    // MARK: - 卡片操作
+
+    func updateMessage(_ messageId: UUID, event: EventSnapshot) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        messages[idx].event = event
+        save()
+    }
+
+    func toggleReminder(messageId: UUID, on: Bool) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        let minutes = on ? (snap.reminderMinutes ?? AppSettings.shared.defaultReminderMinutes) : nil
+        CalendarService.shared.setReminder(snapshot: snap, minutes: minutes)
+        snap.reminderMinutes = minutes
+        messages[idx].event = snap
+        save()
+    }
+
+    func changeReminderDuration(messageId: UUID, minutes: Int) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        CalendarService.shared.setReminder(snapshot: snap, minutes: minutes)
+        snap.reminderMinutes = minutes
+        messages[idx].event = snap
+        save()
+    }
+
+    func changeCalendar(messageId: UUID, to calendarId: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        guard CalendarService.shared.moveToCalendar(snapshot: &snap, to: calendarId) else { return }
+        messages[idx].event = snap
+        save()
+    }
+
+    func applyEdit(messageId: UUID, snapshot: EventSnapshot) {
+        var snap = snapshot
+        CalendarService.shared.updateEvent(&snap)
+        updateMessage(messageId, event: snap)
+    }
+
+    /// 左滑删除：同时删除日历事件
+    func deleteEventMessage(_ messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        CalendarService.shared.deleteEvent(snapshot: snap)
+        snap.deleted = true
+        messages[idx].event = snap
+        save()
+    }
+
+    /// 抽屉"日程管理"数据源
+    var allEvents: [(messageId: UUID, snapshot: EventSnapshot)] {
+        messages.compactMap { msg in
+            guard msg.kind == .eventCard, let e = msg.event, !e.deleted else { return nil }
+            return (msg.id, e)
+        }.sorted { $0.snapshot.start < $1.snapshot.start }
+    }
+
+    // MARK: - 工具
+
+    static func downscale(_ image: UIImage, maxSide: CGFloat) -> UIImage? {
+        let side = max(image.size.width, image.size.height)
+        guard side > maxSide else { return image }
+        let scale = maxSide / side
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+    }
+}

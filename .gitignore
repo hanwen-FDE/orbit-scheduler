@@ -1,0 +1,8 @@
+*.zip
+ScheduleAssistant-ipa/
+ScheduleAssistant-app/
+build/
+DerivedData/
+.DS_Store
+.zcode/
+.tmp/

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDisplayName</key>
+	<string>Orbit</string>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
+		<key>CFBundleAlternateIcons</key>
+		<dict>
+			<key>OrbitViolet</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>OrbitViolet</string></array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>OrbitGreen</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>OrbitGreen</string></array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>OrbitOrange</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>OrbitOrange</string></array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>OrbitMono</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>OrbitMono</string></array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+			<key>OrbitPink</key>
+			<dict>
+				<key>CFBundleIconFiles</key>
+				<array><string>OrbitPink</string></array>
+				<key>UIPrerenderedIcon</key>
+				<false/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>用于选择目标日历并写入识别出的日程</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>用于将识别出的日程写入日历</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>用于将语音转换为文字以识别日程</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>用于录入语音以识别日程</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>用于选择包含日程信息的图片</string>
+	<key>NSCameraUsageDescription</key>
+	<string>用于拍摄包含日程信息的图片</string>
+</dict>
+</plist>

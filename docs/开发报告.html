@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbit 日程助手 · 开发报告（2026-09-06）</title>
+<style>
+  :root { --primary:#6d5df6; --ink:#1d1d27; --muted:#6b6b7b; --line:#e7e7f0; --bg:#f7f7fb; --card:#ffffff; --warn:#b45309; }
+  * { box-sizing:border-box; }
+  body { font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; color:var(--ink); background:var(--bg); margin:0; line-height:1.75; }
+  .wrap { max-width:960px; margin:0 auto; padding:32px 20px 80px; }
+  header.hero { background:linear-gradient(135deg,#6d5df6,#2b1b6b); color:#fff; border-radius:18px; padding:36px 32px; margin-bottom:28px; }
+  header.hero h1 { margin:0 0 8px; font-size:28px; }
+  header.hero p { margin:4px 0; opacity:.92; }
+  nav.toc { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px 24px; margin-bottom:28px; }
+  nav.toc b { display:block; margin-bottom:6px; }
+  nav.toc a { color:var(--primary); text-decoration:none; margin-right:18px; line-height:2; }
+  table.pitfalls th:nth-child(1) { width:5%; }
+  table.pitfalls th:nth-child(2) { width:28%; }
+  table.pitfalls th:nth-child(3) { width:32%; }
+  table.pitfalls th:nth-child(4) { width:35%; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:26px 30px; margin-bottom:26px; }
+  h2 { font-size:20px; margin:0 0 14px; padding-bottom:10px; border-bottom:2px solid var(--line); }
+  h3 { font-size:16px; margin:20px 0 8px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; margin:12px 0; table-layout:fixed; }
+  th { background:#f0eefc; color:#3b2f86; text-align:left; }
+  th,td { border:1px solid var(--line); padding:8px 12px; vertical-align:top; overflow-wrap:anywhere; word-break:break-word; }
+  code { background:#f0f0f6; border-radius:5px; padding:2px 7px; font-size:13px; font-family:Consolas,monospace; overflow-wrap:anywhere; word-break:break-all; }
+  pre { background:#20202c; color:#e8e8f2; border-radius:10px; padding:16px 18px; overflow:auto; font-size:13px; }
+  pre code { background:none; color:inherit; padding:0; }
+  .tip { border-left:4px solid var(--primary); background:#f4f2ff; border-radius:0 10px 10px 0; padding:12px 16px; margin:12px 0; }
+  .warn { border-left:4px solid var(--warn); background:#fff7e8; border-radius:0 10px 10px 0; padding:12px 16px; margin:12px 0; }
+  .step { display:flex; gap:14px; margin:14px 0; }
+  .step .n { flex:none; width:30px; height:30px; border-radius:50%; background:var(--primary); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .timeline { list-style:none; padding:0; margin:0; }
+  .timeline li { position:relative; padding:0 0 18px 26px; border-left:2px solid #d9d4f5; margin-left:8px; }
+  .timeline li::before { content:""; position:absolute; left:-7px; top:6px; width:12px; height:12px; border-radius:50%; background:var(--primary); }
+  .timeline b.time { color:var(--muted); font-weight:600; font-size:13px; }
+  footer { text-align:center; color:var(--muted); font-size:13px; margin-top:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>🪐 Orbit 日程助手 · 开发报告</h1>
+  <p>日期：2026年9月6日 · 全程约 14 小时 · 从零到真机可用</p>
+  <p>环境：Windows（无 Mac）· GitHub Actions 云构建 · Sideloadly 侧载 · iPhone 15 Pro（iOS 26.6.1）</p>
+</header>
+
+<nav class="toc">
+  <b>目录</b>
+  <a href="#c1">1 项目概览</a>
+  <a href="#c2">2 iOS 开发前置条件（先读）</a>
+  <a href="#c3">3 无 Mac 的五种开发路径</a>
+  <a href="#c4">4 今日开发时间线</a>
+  <a href="#c5">5 踩坑记录</a>
+  <a href="#c6">6 安装速查卡</a>
+  <a href="#c7">7 日常维护手册</a>
+  <a href="#c8">8 后续功能规划</a>
+</nav>
+
+<section id="c1">
+<h2>1 · 项目概览</h2>
+<h3>1.1 需求</h3>
+<p>iPhone 15 Pro（iOS 26）上的日程助手：支持<b>语音 / 图片 / 文字</b>三种输入，AI 自动识别为结构化日程，写入手机系统日历；支持多家大模型（保留扩展接口）。</p>
+<h3>1.2 成品（Orbit v2.1）功能清单</h3>
+<table>
+<tr><th>模块</th><th>功能</th></tr>
+<tr><td>聊天主界面</td><td>消息流交互：用户消息气泡（文字/图片缩略/语音转写）→ 助手回复 + 日程卡片</td></tr>
+<tr><td>输入方式</td><td>底部输入栏：＋（照片/相机）｜文字框｜🎤 语音（点击录音、实时转写、自动发送）</td></tr>
+<tr><td>AI 识别</td><td>多 LLM 统一接口：<b>智谱 GLM</b>（默认，多模态）/ OpenAI / 任意 OpenAI 兼容端点；新增服务商只需继承一个基类</td></tr>
+<tr><td>批量识别</td><td>多行日程逐项识别（每行一项、逐项出卡片写入日历）；整场会议（名称+起止时间）单项录入</td></tr>
+<tr><td>日程卡片</td><td>emoji+标题+日期+时间；提醒开关 + 提醒时长（准时/5/15/30/60/120分钟/1天）；"修改日程"切换日历；点卡片编辑/删除</td></tr>
+<tr><td>自动写日历</td><td>识别成功自动写入默认日历（EventKit 完全访问，兼容"仅写入"降级）</td></tr>
+<tr><td>日程页</td><td>主页右上角"日程"：按时间排序列表，点击修改、左滑删除（同步删日历事件）</td></tr>
+<tr><td>侧边抽屉</td><td>6 套 App 图标切换；API 配置+连接测试；默认日历/默认提醒时长；使用说明</td></tr>
+<tr><td>数据</td><td>聊天记录 JSON 持久化，重启可查；设置存 UserDefaults</td></tr>
+</table>
+<h3>1.3 技术栈</h3>
+<p>SwiftUI（iOS 18 目标）· EventKit · Speech · PhotosUI · URLSession async/await · Xcode 工程手写 pbxproj · GitHub Actions（macos-14，Xcode 16.2）双产物构建（真机 IPA + 模拟器 .app）· Sideloadly 免费证书侧载</p>
+<p>仓库：<code>github.com/hanwen-FDE/orbit-scheduler</code>（公开）</p>
+</section>
+
+<section id="c2">
+<h2>2 · iOS 开发前置条件（先读）</h2>
+<div class="warn"><b>为什么这一章最重要：</b>今天实际排障中，多数时间浪费在"没人提前讲清条件"上——开发者模式默认隐藏、免费 Apple ID 的密码规则、Windows 无法编译 iOS 等。以下条件清单<b>在动手前就应确认</b>。</div>
+
+<h3>2.1 硬性条件表</h3>
+<table>
+<tr><th>条件</th><th>说明</th><th>今天是否踩坑</th></tr>
+<tr><td><b>代码编写</b></td><td>任何平台（Windows 也行），本质是写 Swift 源码 + Xcode 工程文件</td><td>否</td></tr>
+<tr><td><b>编译</b></td><td><b>只能在 macOS + Xcode</b>（iOS SDK 专属）。Windows 没有任何官方模拟器/编译器。替代：GitHub Actions 免费 macOS 云构建（本方案）、云 Mac、借 Mac</td><td>是：一开始假设本机可模拟，实际 preflight 直接失败</td></tr>
+<tr><td><b>GitHub 账号</b></td><td>用于云构建（公开仓库 macOS runner 完全免费；私有仓库按 10 倍分钟计费）</td><td>是：git 不走系统代理推送失败，需配 <code>http.proxy=127.0.0.1:7897</code></td></tr>
+<tr><td><b>Apple ID</b></td><td><b>免费 Apple ID 即可</b>，无需 688 元/年开发者账号；但免费签名 7 天过期、每 7 天重签</td><td>是：以为需要开发者账号/协议，实际都不需要</td></tr>
+<tr><td><b>开发者模式</b></td><td>iOS 16+ 手机安装侧载 App <b>必须</b>开启；该开关<b>默认隐藏</b>，需 iMazing（Windows 可用）触发显示</td><td><b>是（最大坑）</b>：Sideloadly 报 "Invalid file"，根因就是它</td></tr>
+<tr><td><b>签名工具</b></td><td>Sideloadly v0.60+（支持 iOS 26）；爱思助手在申请证书环节失败，Sideloadly 可用</td><td>是：爱思 token 报错，弃用</td></tr>
+<tr><td><b>App 权限描述</b></td><td>Info.plist 必须声明每个权限的用途描述（日历/相机/麦克风/语音/相册），漏一个＝运行时崩溃或静默失败</td><td>是：日历静默失败、相机闪退，两次都是漏键</td></tr>
+</table>
+
+<h3>2.2 费用</h3>
+<p>全程 0 元：GitHub Actions 公开仓库免费、免费 Apple ID 签名、iMazing/Sideloadly 基础功能免费。唯一代价是<b>每 7 天连电脑重签一次</b>。要消除 7 天限制：Apple Developer Program 688 元/年（可走 TestFlight，无需开发者模式）。</p>
+</section>
+
+<section id="c3">
+<h2>3 · 无 Mac 的五种 iOS 开发路径</h2>
+<table>
+<tr><th>路径</th><th>成本</th><th>优点</th><th>缺点</th><th>适合</th></tr>
+<tr><td><b>① GitHub Actions 云构建 + Sideloadly 侧载</b><br>（本项目采用）</td><td>0 元</td><td>日常只需浏览器+数据线；全自动构建流水线；改代码→push→下载 IPA→重装</td><td>7 天重签；无法断点调试；模拟器测试要配合 Appetize</td><td>功能开发、自用分发</td></tr>
+<tr><td>② Appetize.io 网页模拟</td><td>免费额度（约 100 分钟/月）</td><td>浏览器直接跑编译好的 .app，无需手机</td><td>无麦克风/相机/推送；性能一般</td><td>快速验证 UI 逻辑</td></tr>
+<tr><td>③ 云 Mac（MacinCloud / MacStadium 等）</td><td>约 $1/小时起</td><td>完整 Xcode：模拟器、断点调试、真机调试一步到位</td><td>要付费；网络延迟影响体验</td><td>认真持续开发</td></tr>
+<tr><td>④ 借/买 Mac</td><td>人情 / 自购</td><td>体验最佳，Xcode 一次连接即可显示开发者模式开关</td><td>依赖他人；Mac 不便宜</td><td>长期开发者</td></tr>
+<tr><td>⑤ 付费开发者 + TestFlight</td><td>688 元/年</td><td>签名一年有效；TestFlight 安装<b>不需要开发者模式</b>；可分发给别人</td><td>年费；仍需一台 Mac 上传构建（可用①的 CI 产出再上传）</td><td>正式/多人使用</td></tr>
+</table>
+<div class="tip">组合建议：个人自用＝①+②；决定长期投入＝③或④；要给同事装＝⑤。</div>
+</section>
+
+<section id="c4">
+<h2>4 · 今日开发时间线</h2>
+<ul class="timeline">
+<li><b class="time">上午</b><br><b>v1 立项与实现</b>：需求确认（云端大模型/智谱/系统日历/模拟器优先）；设计多 LLM Provider 架构（OpenAI 兼容基类 + 智谱/OpenAI/自定义三家）；实现表单式 UI（输入页/确认页/设置页）+ Speech 语音转写 + EventKit 写日历；手写 Xcode 工程文件（pbxproj）。</li>
+<li><b class="time">中午</b><br><b>CI 流水线搭建</b>：Windows 无法跑 iOS 模拟器（插件 preflight 失败）→ 改为 GitHub Actions 方案；浏览器代操作建仓 hanwen-FDE/orbit-scheduler；配 workflow（模拟器 .app 产物）+ 共享 scheme；首次推送需 Git Credential Manager 授权。</li>
+<li><b class="time">下午</b><br><b>真机侧载排障（耗时最长的一段）</b>：工作流被改为真机 IPA 版 → 保留并新增模拟器任务（双产物）；Sideloadly 依次遭遇：安装包写入错误（旧进程占用）→ CFBundleIdentifier 缺失（手写 Info.plist 缺必需字段，修：GENERATE_INFOPLIST_FILE=YES）→ Invalid file（换英文路径/关代理/升级工具均无效）→ 登录 -20101/-22406 → 爱思助手 token 报错弃用 → 最终定位两大根因：<b>① iOS 26 开发者模式未开启且开关隐藏（iMazing 触发显示后开启）② 免费 Apple ID 必须用主密码而非 App 专用密码</b>。真机安装成功，v1 跑通。</li>
+<li><b class="time">晚上</b><br><b>v1 收尾</b>：日历权限弹窗不出现（缺 iOS17+ 新权限键 NSCalendars*AccessUsageDescription）→ 修复重建安装，全流程打通。<br><b>v2 聊天式改版</b>：参照 Toki 设计——聊天消息流 + 日程卡片 + 底部输入栏（＋/文字/🎤）+ 侧边抽屉（图标/API/默认日历/提醒/管理）；LLM 返回改日程数组（支持批量与整场会议）；更名 Orbit；程序化生成 6 套图标（PIL 渐变+轨道图形）；CFBundleDisplayName/备选图标注册。<br><b>v2.1 反馈修复</b>：日程页移到右上角、黑框气泡 bug、去顶栏标题、＋面板自动收起、批量识别、抽屉改版+使用说明页。<br><b>相机闪退修复</b>：补 NSCameraUsageDescription。</li>
+</ul>
+<p>最终状态：Run #12 构建成功，真机可正常使用文字/语音/图片/相机/批量识别，日程自动写入系统日历。</p>
+</section>
+
+<section id="c5">
+<h2>5 · 踩坑记录（12 坑全档）</h2>
+<table class="pitfalls">
+<tr><th>#</th><th>现象</th><th>根因</th><th>解法</th></tr>
+<tr><td>1</td><td>Windows 上想跑 iOS 模拟器</td><td>iOS 模拟器 macOS 专属</td><td>GitHub Actions 云构建 + Appetize/Sideloadly</td></tr>
+<tr><td>2</td><td>Sideloadly 安装报 <code>CFBundleIdentifier</code></td><td>手写 Info.plist 缺 BundleID 等必需字段，且关闭了自动生成</td><td><code>GENERATE_INFOPLIST_FILE = YES</code> 合并权限描述</td></tr>
+<tr><td>3</td><td>git push 连不上 GitHub</td><td>系统走 Clash 代理（7897），git 默认不读系统代理</td><td><code>git -c http.proxy=http://127.0.0.1:7897 push</code>（Clash 开着时）</td></tr>
+<tr><td>4</td><td>developer.apple.com 显示 302 / 转圈</td><td>代理退出后直连不稳；未登录先进开发者站被重定向</td><td>先登 appleid.apple.com 再进开发者站；必要时开代理</td></tr>
+<tr><td>5</td><td>爱思助手"Get Xcode token"失败</td><td>工具实现兼容性（对手机号 Apple ID 尤甚）</td><td>弃用，换 Sideloadly</td></tr>
+<tr><td>6</td><td>Sideloadly 登录 -20101</td><td>两步验证账号密码形态错误</td><td>见坑 9</td></tr>
+<tr><td>7</td><td>Sideloadly 登录 -22406</td><td>免费 Apple ID 用了 App 专用密码</td><td>见坑 9</td></tr>
+<tr><td>8</td><td>Sideloadly "Invalid file"</td><td><b>iOS 16+ 开发者模式未开启</b>（开关默认隐藏，连 Sideloadly 自己都触发不出来）</td><td>iMazing 3.4+（Windows）"启用开发者模式" → 手机设置里开启并重启</td></tr>
+<tr><td>9</td><td>密码到底填哪个</td><td>苹果规则：App 专用密码只对<b>付费开发者账号</b>有效；免费账号必须 Apple ID 主密码</td><td>手机号 ID + <b>主密码</b>（弹验证码就输手机上的码）</td></tr>
+<tr><td>10</td><td>添加日历无弹窗、提示无可用日历</td><td>缺 iOS 17+ 新权限键 <code>NSCalendarsFullAccessUsageDescription</code> 等</td><td>补两组日历权限键；申请完全访问、仅写入时回退默认日历</td></tr>
+<tr><td>11</td><td>助手回复整块黑框无文字</td><td>SwiftUI <code>.background(Shape)</code> 未指定填充色 → 默认前景色填充（黑底黑字）</td><td><code>.background(shape.fill(Color(.secondarySystemBackground)))</code>，用户气泡 fill(.blue)</td></tr>
+<tr><td>12</td><td>点相机闪退</td><td>缺 <code>NSCameraUsageDescription</code>，iOS 直接杀进程</td><td>Info.plist 补键，首次使用弹权限询问</td></tr>
+</table>
+<div class="tip">规律总结：<b>权限键要一次配全</b>（日历/相机/麦克风/语音/相册）；<b>免费侧载三件套</b>= 开发者模式 + 主密码 + Sideloadly；<b>报错先查权限，再查路径，再查网络</b>。</div>
+</section>
+
+<section id="c6">
+<h2>6 · 安装速查卡（新手机/重装/7天重签通用）</h2>
+<div class="step"><div class="n">1</div><div><b>开启开发者模式</b>：电脑装 <b>iMazing 3.4+</b>（imazing.com）→ iPhone 连线 → 找"启用开发者模式"点执行 → 手机 <b>设置 → 隐私与安全性 → 开发者模式</b>（拉到底）→ 打开 → 输锁屏密码 → <b>重启手机</b>。（只需一次，已开过的手机跳过）</div></div>
+<div class="step"><div class="n">2</div><div><b>下载 IPA</b>：github.com/hanwen-FDE/orbit-scheduler → Actions → 最新绿勾运行 → Artifacts → 下载 <code>ScheduleAssistant-ipa</code> → 解压出 <code>ScheduleAssistant.ipa</code>，放到<b>纯英文路径</b>（如 <code>D:\ipa\</code>）。</div></div>
+<div class="step"><div class="n">3</div><div><b>Sideloadly 安装</b>：sideloadly.io 装 v0.60+ → iPhone 连线（手机点"信任"）→ 拖入 IPA → Apple Account 填<b>手机号 ID</b>（8613…）→ 密码填 <b>Apple ID 主密码</b>（<b>不是</b> App 专用密码！弹出验证码就输 iPhone 上显示的 6 位码）→ Start。</div></div>
+<div class="step"><div class="n">4</div><div><b>信任证书</b>：手机 <b>设置 → 通用 → VPN与设备管理</b> → 点你的 Apple ID → <b>信任</b> → 打开 Orbit。</div></div>
+<div class="step"><div class="n">5</div><div><b>每 7 天重签</b>：签名到期 App 打不开时，重复第 3 步（连线 → Sideloadly → Start）即可，<b>聊天记录和日程数据不丢</b>。改了代码就先做第 2 步换新 IPA。</div></div>
+<div class="warn">常见报错对照：<b>-20101/-22406</b>＝密码形态错（用主密码）；<b>Invalid file</b>＝开发者模式没开（做第 1 步）；<b>连不上 GitHub</b>＝Clash 开着但 git 没走代理（本仓库已配好，Clash 必须处于开启状态推送）。</div>
+</section>
+
+<section id="c7">
+<h2>7 · 日常维护手册</h2>
+<h3>7.1 改功能 / 修 bug 的标准流程</h3>
+<pre><code>1. 修改代码（本机 Sources/ 下的 Swift 文件）
+2. git add -A && git commit -m "改动说明"
+3. git push        （需要 Clash 开着）
+4. 等 GitHub Actions 约 1 分钟构建（绿勾=成功，红叉=看日志发我）
+5. 下载新 ScheduleAssistant-ipa → 解压覆盖 D:\ipa\
+6. Sideloadly 重装（第 6 章第 3 步）</code></pre>
+<h3>7.2 数据说明</h3>
+<p>聊天记录与日程快照存于 App 沙盒（<code>orbit-chat.json</code>）；日程本体在系统日历（iCloud 同步）。<b>卸载 App 会清聊天记录</b>，但日历里的日程保留（可在系统日历或 Orbit 重装后通过"日程"页关联的卡片管理）。API Key 存于 UserDefaults，重装覆盖不丢。</p>
+<h3>7.3 关键文件索引</h3>
+<table>
+<tr><th>文件</th><th>职责</th></tr>
+<tr><td><code>Sources/LLMProvider.swift</code></td><td>多服务商抽象 + Prompt + JSON 解析（换模型/调提示词改这里）</td></tr>
+<tr><td><code>Sources/ChatStore.swift</code></td><td>消息管线：发送→识别→写日历→卡片（业务主逻辑）</td></tr>
+<tr><td><code>Sources/CalendarService.swift</code></td><td>EventKit 增删改查/提醒/换日历</td></tr>
+<tr><td><code>Sources/ChatView / MessageViews</code></td><td>聊天 UI 与日程卡片</td></tr>
+<tr><td><code>.github/workflows/build.yml</code></td><td>CI 双产物构建（IPA + 模拟器 .app）</td></tr>
+<tr><td><code>make_icons.py</code></td><td>图标生成脚本（改配色重跑）</td></tr>
+</table>
+</section>
+
+<section id="c8">
+<h2>8 · 后续功能规划（Backlog）</h2>
+<table>
+<tr><th>优先级</th><th>功能</th><th>说明</th></tr>
+<tr><td>高</td><td>识别准确度调优</td><td>收集识别错例，针对性改 Prompt（"下周三"推算、跨天会议、农历）</td></tr>
+<tr><td>高</td><td>分享菜单接入</td><td>微信里复制的会议通知 → 系统分享 → Orbit 一键识别</td></tr>
+<tr><td>中</td><td>剪贴板监听提示</td><td>复制日程文本后打开 App 自动提示识别</td></tr>
+<tr><td>中</td><td>Siri 快捷指令</td><td>"嘿 Siri，记个日程"直达语音输入</td></tr>
+<tr><td>中</td><td>日历视图</td><td>日程页增加月/周视图，不只列表</td></tr>
+<tr><td>低</td><td>云端同步</td><td>聊天记录/配置 iCloud 同步，换机不丢</td></tr>
+<tr><td>低</td><td>TestFlight 分发</td><td>若开通 688 元/年开发者账号，同事可直接安装、免 7 天重签</td></tr>
+</table>
+<p style="color:var(--muted)">—— 报告完 ——</p>
+</section>
+
+<footer>
+  Orbit 开发报告 · 2026-09-06 · 主文档为本 HTML（可直接编辑），Word 版用于批注 · 仓库 github.com/hanwen-FDE/orbit-scheduler
+</footer>
+</div>
+</body>
+</html>

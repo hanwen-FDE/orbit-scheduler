@@ -1,0 +1,83 @@
+name: Build iOS App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:   # 也支持手动触发
+
+jobs:
+  # 真机未签名 IPA：下载后用 Sideloadly 重签安装到 iPhone
+  build-ipa:
+    runs-on: macos-14   # Apple Silicon macOS + Xcode 16（含 iOS 18 SDK）
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 选择最新 Xcode（含 iOS 18 SDK）
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: 编译真机版（无签名，之后用 Sideloadly 重签）
+        run: |
+          xcodebuild \
+            -project ScheduleAssistant.xcodeproj \
+            -scheme ScheduleAssistant \
+            -sdk iphoneos \
+            -configuration Release \
+            -derivedDataPath build \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+
+      - name: 打包 IPA（先 ad-hoc 签名，符合侧载工具预期）
+        run: |
+          APP="build/Build/Products/Release-iphoneos/ScheduleAssistant.app"
+          codesign --force --sign - --generate-entitlement-der "$APP"
+          codesign -vv "$APP"
+          mkdir -p build/Payload
+          cp -R "$APP" build/Payload/
+          cd build
+          zip -qry ../ScheduleAssistant.ipa Payload
+          unzip -l ../ScheduleAssistant.ipa
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScheduleAssistant-ipa
+          path: ScheduleAssistant.ipa
+
+  # 模拟器版 .app：上传 Appetize.io 在浏览器中运行
+  build-simulator:
+    runs-on: macos-14
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 选择最新 Xcode（含 iOS 18 SDK）
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: 编译（iOS 模拟器目标，无需签名）
+        run: |
+          xcodebuild \
+            -project ScheduleAssistant.xcodeproj \
+            -scheme ScheduleAssistant \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: 打包 .app
+        run: |
+          cd build/Build/Products/Debug-iphonesimulator
+          zip -qry "$GITHUB_WORKSPACE/ScheduleAssistant-app.zip" ScheduleAssistant.app
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScheduleAssistant-app
+          path: ScheduleAssistant-app.zip
