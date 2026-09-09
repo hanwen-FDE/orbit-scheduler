@@ -1,0 +1,30 @@
+name: Sign iOS Shortcut
+
+on:
+  push:
+    branches: [ main ]
+    paths: [ "Orbit快捷指令/**" ]
+  workflow_dispatch:   # 手动触发
+
+# 为什么在云端签名：iOS 15 起 .shortcut 文件必须带 Apple CMS 签名才能导入，
+# 本机网络访问 HubSign 签名服务可能被 Cloudflare 拦截（国内常见），
+# GitHub Actions 的海外机房 IP 通常不受影响。
+jobs:
+  sign-shortcut:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 生成并签名快捷指令
+        run: |
+          cd "Orbit快捷指令"
+          python build_shortcut.py
+          python sign_shortcut.py
+
+      - name: 上传已签名快捷指令
+        uses: actions/upload-artifact@v4
+        with:
+          name: Orbit-shortcut-signed
+          path: "Orbit快捷指令/Orbit轨道日程助手-已签名.shortcut"
+          if-no-files-found: error
