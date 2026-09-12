@@ -1,10 +1,14 @@
 import SwiftUI
 import PhotosUI
+import Combine
 
 /// 聊天主界面
 struct ChatView: View {
     @EnvironmentObject private var chat: ChatStore
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var speech = SpeechService()
+    @StateObject private var briefing = DailyBriefingStore()
+    @ObservedObject private var app = AppSettings.shared
 
     @State private var inputText = ""
     @State private var showPlusPanel = false
@@ -13,11 +17,20 @@ struct ChatView: View {
     @State private var editingMessage: ChatMessage?
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
+    @State private var showHabitSheet = false
+    @State private var hasScrolledToRestoredMessages = false
     @FocusState private var inputFocused: Bool
+
+    private static let chatBottomAnchor = "orbit-chat-bottom"
 
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
+                if app.morningBriefingEnabled {
+                    DailyBriefingCard(store: briefing)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                }
                 messageList
                 inputBar
             }
@@ -40,10 +53,25 @@ struct ChatView: View {
         .sheet(isPresented: $showScheduleList) { ScheduleListView() }
         .sheet(isPresented: $showPlusPanel) { plusPanel }
         .sheet(isPresented: $showCamera) { CameraPicker { sendImage($0) } }
+        .sheet(isPresented: $showHabitSheet) { HabitDetailSheet() }
         .sheet(item: $editingMessage) { msg in
             if let snap = msg.event {
                 EventDetailSheet(messageId: msg.id, snapshot: snap)
             }
+        }
+        .onAppear {
+            refreshBriefingAndHandleShortcut()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            refreshBriefingAndHandleShortcut()
+        }
+        .onOpenURL { url in
+            OrbitDeepLink.accept(url)
+            handleShortcutRequest()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .orbitShortcutRequested)) { _ in
+            handleShortcutRequest()
         }
     }
 
@@ -60,13 +88,33 @@ struct ChatView: View {
                         )
                         .id(msg.id)
                     }
+                    // 用固定锚点而不是最后一条消息本身，确保最后一条消息
+                    // 可以完整露出在输入栏上方。
+                    Color.clear
+                        .frame(height: 1)
+                        .id(Self.chatBottomAnchor)
                 }
                 .padding()
             }
             .scrollDismissesKeyboard(.interactively)
+            .onAppear {
+                // 持久化的消息在 ChatStore 初始化时已经载入，因此不会触发
+                // onChange。延迟到首个布局周期后再滚到底部。
+                guard !hasScrolledToRestoredMessages else { return }
+                hasScrolledToRestoredMessages = true
+                DispatchQueue.main.async {
+                    proxy.scrollTo(Self.chatBottomAnchor, anchor: .bottom)
+                }
+            }
             .onChange(of: chat.messages.count) { _, _ in
-                if let last = chat.messages.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                withAnimation { proxy.scrollTo(Self.chatBottomAnchor, anchor: .bottom) }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // 从后台回到 App 时，SwiftUI 可能会恢复到 ScrollView 的起点；
+                // 此处保证用户回到的是最近一段对话。
+                guard phase == .active else { return }
+                DispatchQueue.main.async {
+                    proxy.scrollTo(Self.chatBottomAnchor, anchor: .bottom)
                 }
             }
         }
@@ -168,6 +216,20 @@ struct ChatView: View {
                         Text("相机").font(.footnote).foregroundStyle(.primary)
                     }
                 }
+                Button {
+                    showPlusPanel = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        showHabitSheet = true
+                    }
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "leaf")
+                            .font(.system(size: 24))
+                            .frame(width: 64, height: 64)
+                            .background(Circle().fill(Color(.secondarySystemBackground)))
+                        Text("习惯").font(.footnote).foregroundStyle(.primary)
+                    }
+                }
             }
             .padding(.vertical, 26)
         }
@@ -197,6 +259,21 @@ struct ChatView: View {
 
     private func sendImage(_ image: UIImage) {
         chat.send(image: image)
+    }
+
+    private func refreshBriefingAndHandleShortcut() {
+        briefing.refresh()
+        handleShortcutRequest()
+    }
+
+    private func handleShortcutRequest() {
+        guard let destination = OrbitShortcutRequest.consume() else { return }
+        switch destination {
+        case .compose:
+            DispatchQueue.main.async { inputFocused = true }
+        case .today:
+            showScheduleList = true
+        }
     }
 }
 

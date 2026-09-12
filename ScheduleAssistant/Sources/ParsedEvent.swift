@@ -11,6 +11,8 @@ struct ParsedEvent: Codable, Equatable {
     var location: String?
     var notes: String?
     var isAllDay: Bool?
+    /// 仅当用户明确说“每天/每周/每月”等时填写；习惯可在 App 中另存为系统提醒事项。
+    var recurrence: RecurrenceSpec?
     /// 模型对识别结果的置信度 0-1
     var confidence: Double?
 

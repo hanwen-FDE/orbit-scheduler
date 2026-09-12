@@ -4,6 +4,17 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>Orbit</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.orbit.quick-entry</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>orbit</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleIcons</key>
 	<dict>
 		<key>CFBundlePrimaryIcon</key>
@@ -54,6 +65,10 @@
 	<string>用于选择目标日历并写入识别出的日程</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>用于将识别出的日程写入日历</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>用于把循环习惯和选定日程同步到系统提醒事项</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>用于在你主动开启晨间天气后显示所在地区的天气</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>用于将语音转换为文字以识别日程</string>
 	<key>NSMicrophoneUsageDescription</key>

@@ -2,7 +2,9 @@ name: Build iOS App
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+      - "codex/**"
   workflow_dispatch:   # 也支持手动触发
 
 jobs:
@@ -34,6 +36,13 @@ jobs:
       - name: 打包 IPA（先 ad-hoc 签名，符合侧载工具预期）
         run: |
           APP="build/Build/Products/Release-iphoneos/ScheduleAssistant.app"
+
+          # 小组件是嵌入式 App Extension；先签扩展，再签主 App，
+          # 这样 Sideloadly 重新签名时能保留完整的 PlugIns 结构。
+          if [ -d "$APP/PlugIns" ]; then
+            find "$APP/PlugIns" -maxdepth 2 -type d -name "*.appex" \
+              -exec codesign --force --sign - --generate-entitlement-der {} \;
+          fi
           codesign --force --sign - --generate-entitlement-der "$APP"
           codesign -vv "$APP"
           mkdir -p build/Payload

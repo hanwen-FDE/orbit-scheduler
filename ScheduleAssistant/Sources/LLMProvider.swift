@@ -15,7 +15,8 @@ protocol LLMProvider {
     func testConnection(config: LLMProviderConfig) async throws -> Bool
 }
 
-/// 单个服务商的用户配置（Key、地址、模型，存于 UserDefaults）
+/// 单个服务商的用户配置。API Key 只在运行内存和 Keychain 中保存；
+/// 接口地址与模型名才会进入普通偏好设置。
 struct LLMProviderConfig: Codable, Equatable {
     var apiKey: String = ""
     var baseURL: String = ""
@@ -98,10 +99,11 @@ class OpenAICompatProvider: LLMProvider {
     你是一个日程信息提取助手。从用户提供的文字或图片中提取**所有**日程安排，严格返回 JSON（不要任何其他文字、不要 markdown 代码块），格式为：
     {"events": [{...}, {...}]}
     每个元素的字段：
-    {"title": "日程标题(字符串,必填,简短)", "emoji": "一个最贴合日程主题的emoji字符", "startDate": "开始时间,ISO8601格式如2026-09-10T14:00:00+08:00", "endDate": "结束时间,ISO8601格式,可null", "location": "地点,可null", "notes": "补充说明,可null", "isAllDay": 是否全天(布尔), "confidence": 置信度0到1的小数}
+    {"title": "日程标题(字符串,必填,简短)", "emoji": "一个最贴合日程主题的emoji字符", "startDate": "开始时间,ISO8601格式如2026-09-10T14:00:00+08:00", "endDate": "结束时间,ISO8601格式,可null", "location": "地点,可null", "notes": "补充说明,可null", "isAllDay": 是否全天(布尔), "recurrence": {"frequency":"daily|weekdays|weekly|monthly|yearly", "interval": 正整数} 或 null, "confidence": 置信度0到1的小数}
     注意：
     - 内容里有几项日程，events 数组就放几个元素：整场会议只给名称和起止时间时输出 1 项；多行罗列的日程表（每行一项）要逐项输出，不可合并。
     - 用户没说年份时按当前时间推算合理的年份；没说结束时间时 endDate 填 null。
+    - 仅当用户明确要求循环（例如“每天”“工作日”“每周”“每两周”“每月”“每年”）才填写 recurrence；没有循环就填 null。interval 默认 1；“每两周”填 weekly + interval 2。
     - 时间不确定时 confidence 给低值。
     - 当前系统时间会随用户消息一并提供在文字中（如有）。
     - 如果内容里完全没有日程信息，返回 {"events": []}。
@@ -134,15 +136,18 @@ class OpenAICompatProvider: LLMProvider {
         request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 30
-        let body = ChatRequest(model: effectiveModel(config),
-                               messages: [.init(role: "user", content: [.init(type: "text", text: "hi", image_url: nil)])],
-                               temperature: 0)
-        request.httpBody = try JSONEncoder().encode(body)
-        let (_, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse else { return false }
-        guard (200..<300).contains(http.statusCode) else {
-            throw LLMError.http(http.statusCode, "")
-        }
+
+        // 与正式的日程解析使用相同的请求格式和 JSON 校验，避免出现
+        // “测试连接成功，但实际识别失败”的假阳性。
+        request.httpBody = try buildRequestBody(
+            text: "明天上午十点进行连接测试会议。",
+            image: nil,
+            config: config,
+            systemPrompt: Self.systemPrompt
+        )
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let content = try Self.extractContent(data: data, response: response)
+        _ = try Self.decodeEvents(from: content)
         return true
     }
 
@@ -246,7 +251,8 @@ class CustomCompatProvider: OpenAICompatProvider {
 
 // MARK: - 全局设置
 
-/// 当前生效的服务商与各服务商的配置，持久化到 UserDefaults
+/// 当前生效的服务商与各服务商的配置。
+/// 为兼容旧版本，会把已有 UserDefaults 中的 Key 迁移到 Keychain 后立即脱敏保存。
 @MainActor
 final class LLMSettings: ObservableObject {
     static let shared = LLMSettings()
@@ -266,12 +272,27 @@ final class LLMSettings: ObservableObject {
 
     init() {
         activeProviderId = defaults.string(forKey: activeKey) ?? "zhipu"
+        var loaded: [String: LLMProviderConfig]
         if let data = defaults.data(forKey: configKey),
            let saved = try? JSONDecoder().decode([String: LLMProviderConfig].self, from: data) {
-            configs = saved
+            loaded = saved
         } else {
-            configs = [:]
+            loaded = [:]
         }
+
+        for provider in providers {
+            let account = keychainAccount(for: provider.id)
+            if let secureKey = KeychainService.read(account: account) {
+                var config = loaded[provider.id] ?? LLMProviderConfig()
+                config.apiKey = secureKey
+                loaded[provider.id] = config
+            } else if let legacyKey = loaded[provider.id]?.apiKey, !legacyKey.isEmpty {
+                // 首次升级时，把旧版明文偏好迁到 Keychain；保存阶段会把它从偏好中抹掉。
+                _ = KeychainService.save(legacyKey, account: account)
+            }
+        }
+        configs = loaded
+        saveConfigs()
     }
 
     var activeProvider: LLMProvider {
@@ -287,8 +308,25 @@ final class LLMSettings: ObservableObject {
     }
 
     private func saveConfigs() {
-        if let data = try? JSONEncoder().encode(configs) {
+        var redacted = configs
+        for provider in providers {
+            guard let config = configs[provider.id] else { continue }
+            let account = keychainAccount(for: provider.id)
+            if config.apiKey.isEmpty {
+                KeychainService.delete(account: account)
+                continue
+            }
+            guard KeychainService.save(config.apiKey, account: account) else { continue }
+            var publicConfig = config
+            publicConfig.apiKey = ""
+            redacted[provider.id] = publicConfig
+        }
+        if let data = try? JSONEncoder().encode(redacted) {
             defaults.set(data, forKey: configKey)
         }
+    }
+
+    private func keychainAccount(for providerId: String) -> String {
+        "orbit.llm.api-key.\(providerId)"
     }
 }

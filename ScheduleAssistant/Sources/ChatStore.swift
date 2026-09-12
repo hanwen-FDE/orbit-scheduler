@@ -99,20 +99,50 @@ final class ChatStore: ObservableObject {
                     let snap = snapshots[0]
                     let timePart = snap.isAllDay ? "" : " \(snap.start.shortTime)"
                     let reminderPart = snap.reminderMinutes != nil ? "，会准时提醒您" : ""
-                    messages[thinkingIndex].text = "已安排《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(reminderPart)"
+                    let recurrencePart = snap.recurrence.map { "，\($0.displayText)循环" } ?? ""
+                    let conflictPart = (snap.conflicts?.isEmpty == false)
+                        ? "\n发现时间冲突，卡片里有可选的新时间建议。" : ""
+                    messages[thinkingIndex].text = "已安排《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(recurrencePart)\(reminderPart)\(conflictPart)"
                 } else {
                     let earliest = snapshots.min { $0.start < $1.start }!
-                    messages[thinkingIndex].text = "已识别 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)，全部已写入日历"
+                    let conflictCount = snapshots.reduce(0) { $0 + ($1.conflicts?.count ?? 0) }
+                    let conflictPart = conflictCount > 0 ? "，其中发现 \(conflictCount) 个时间冲突，可在卡片中查看建议" : ""
+                    messages[thinkingIndex].text = "已识别 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)，全部已写入日历\(conflictPart)"
                 }
                 for snap in snapshots {
                     messages.append(ChatMessage(role: .assistant, kind: .eventCard, event: snap))
                 }
             } catch {
-                messages[thinkingIndex].text = "出错了：\(error.localizedDescription)\n可以点这里重试，或检查左上角的 API 设置"
+                messages[thinkingIndex].text = userFacingErrorMessage(for: error)
             }
             isThinking = false
             save()
         }
+    }
+
+    /// 区分配置、网络、模型返回和日历错误，避免所有失败都被误导为 API Key 问题。
+    private func userFacingErrorMessage(for error: Error) -> String {
+        let detail = error.localizedDescription
+        let guidance: String
+
+        if let llmError = error as? LLMError {
+            switch llmError {
+            case .noAPIKey:
+                guidance = "请在左上角的 AI 识别（API）中填写当前服务商的 API Key。"
+            case .http:
+                guidance = "请检查服务商、模型名、接口地址和账户额度后重试。"
+            case .invalidResponse:
+                guidance = "AI 服务已响应，但返回内容无法识别。请重试，或更换支持当前模型的服务商。"
+            case .noInput:
+                guidance = "请输入文字或选择图片后再试。"
+            }
+        } else if error is URLError {
+            guidance = "请检查网络连接后重试；API 设置已通过测试时，不需要重复填写 Key。"
+        } else {
+            guidance = "可以点这里重试；若持续发生，请检查日历权限和系统日历账户。"
+        }
+
+        return "出错了：\(detail)\n\(guidance)"
     }
 
     /// 自动写入默认日历；权限或日历不可用时降级为未写入卡片
@@ -145,8 +175,15 @@ final class ChatStore: ObservableObject {
             notes: parsed.notes,
             reminderMinutes: AppSettings.shared.defaultReminderMinutes,
             calendarIdentifier: calendar.calendarIdentifier,
-            calendarTitle: calendar.title
+            calendarTitle: calendar.title,
+            recurrence: parsed.recurrence
         )
+        // 写入前检查，不自动改动用户指定时间；冲突和建议只显示在卡片中供用户决定。
+        let conflicts = CalendarService.shared.conflicts(for: snapshot)
+        snapshot.conflicts = conflicts
+        if !conflicts.isEmpty {
+            snapshot.suggestedStart = CalendarService.shared.suggestedStart(for: snapshot)
+        }
         snapshot.eventIdentifier = CalendarService.shared.createEvent(snapshot)
         return snapshot
     }
@@ -188,17 +225,99 @@ final class ChatStore: ObservableObject {
 
     func applyEdit(messageId: UUID, snapshot: EventSnapshot) {
         var snap = snapshot
+        refreshConflictMetadata(for: &snap)
         CalendarService.shared.updateEvent(&snap)
         updateMessage(messageId, event: snap)
+        resyncNativeReminderIfNeeded(messageId: messageId, snapshot: snap)
+    }
+
+    func applySuggestedTime(messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event,
+              let suggestedStart = snap.suggestedStart else { return }
+        let duration = snap.end.timeIntervalSince(snap.start)
+        snap.start = suggestedStart
+        snap.end = suggestedStart.addingTimeInterval(duration)
+        applyEdit(messageId: messageId, snapshot: snap)
+    }
+
+    func refreshConflicts(messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        refreshConflictMetadata(for: &snap)
+        messages[idx].event = snap
+        save()
     }
 
     /// 左滑删除：同时删除日历事件
-    func deleteEventMessage(_ messageId: UUID) {
+    func deleteEventMessage(_ messageId: UUID, includingFuture: Bool = false) {
         guard let idx = messages.firstIndex(where: { $0.id == messageId }),
               var snap = messages[idx].event else { return }
-        CalendarService.shared.deleteEvent(snapshot: snap)
+        CalendarService.shared.deleteEvent(snapshot: snap, includingFuture: includingFuture)
+        if includingFuture {
+            RemindersService.shared.deleteReminder(identifier: snap.nativeReminderIdentifier)
+        }
         snap.deleted = true
         messages[idx].event = snap
+        save()
+    }
+
+    // MARK: - 原生提醒事项与循环习惯
+
+    func syncToNativeReminders(messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              let snap = messages[idx].event else { return }
+        Task {
+            do {
+                let identifier = try await RemindersService.shared.sync(event: snap)
+                guard let latestIndex = messages.firstIndex(where: { $0.id == messageId }),
+                      var latest = messages[latestIndex].event else { return }
+                latest.nativeReminderIdentifier = identifier
+                messages[latestIndex].event = latest
+                save()
+            } catch {
+                appendSystemMessage("未能同步到系统提醒事项：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func removeNativeReminder(messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        RemindersService.shared.deleteReminder(identifier: snap.nativeReminderIdentifier)
+        snap.nativeReminderIdentifier = nil
+        messages[idx].event = snap
+        save()
+    }
+
+    func createHabit(title: String, start: Date, recurrence: RecurrenceSpec, notes: String? = nil) {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        Task {
+            do {
+                var habit = HabitSnapshot(
+                    title: trimmed,
+                    emoji: "🌱",
+                    start: start,
+                    recurrence: recurrence,
+                    notes: notes
+                )
+                habit.reminderIdentifier = try await RemindersService.shared.createHabit(habit)
+                messages.append(ChatMessage(role: .assistant, kind: .habitCard, habit: habit))
+                appendSystemMessage("已建立循环习惯《\(habit.title)》，它会出现在系统“提醒事项”App 中。")
+                save()
+            } catch {
+                appendSystemMessage("未能建立习惯提醒：\(error.localizedDescription)")
+            }
+        }
+    }
+
+    func deleteHabitMessage(_ messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var habit = messages[idx].habit else { return }
+        RemindersService.shared.deleteReminder(identifier: habit.reminderIdentifier)
+        habit.deleted = true
+        messages[idx].habit = habit
         save()
     }
 
@@ -208,6 +327,33 @@ final class ChatStore: ObservableObject {
             guard msg.kind == .eventCard, let e = msg.event, !e.deleted else { return nil }
             return (msg.id, e)
         }.sorted { $0.snapshot.start < $1.snapshot.start }
+    }
+
+    private func refreshConflictMetadata(for snapshot: inout EventSnapshot) {
+        let conflicts = CalendarService.shared.conflicts(for: snapshot)
+        snapshot.conflicts = conflicts
+        snapshot.suggestedStart = conflicts.isEmpty
+            ? nil : CalendarService.shared.suggestedStart(for: snapshot)
+    }
+
+    private func appendSystemMessage(_ text: String) {
+        messages.append(ChatMessage(role: .assistant, kind: .text, text: text))
+    }
+
+    private func resyncNativeReminderIfNeeded(messageId: UUID, snapshot: EventSnapshot) {
+        guard snapshot.nativeReminderIdentifier != nil else { return }
+        Task {
+            do {
+                let identifier = try await RemindersService.shared.sync(event: snapshot)
+                guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+                      var latest = messages[idx].event else { return }
+                latest.nativeReminderIdentifier = identifier
+                messages[idx].event = latest
+                save()
+            } catch {
+                appendSystemMessage("日程已修改，但同步系统提醒事项失败：\(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - 工具

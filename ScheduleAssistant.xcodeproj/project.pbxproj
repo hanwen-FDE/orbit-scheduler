@@ -33,7 +33,39 @@
 		1000000127 /* OrbitMono@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000127; };
 		1000000128 /* OrbitPink.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000128; };
 		1000000129 /* OrbitPink@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 2000000129; };
+		1000000130 /* RemindersService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000130; };
+		1000000131 /* HabitDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000131; };
+		1000000132 /* DailyBriefing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000132; };
+		1000000133 /* OrbitShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000133; };
+		1000000137 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000137; };
+		1000000134 /* OrbitWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000134; };
+		1000000135 /* OrbitQuickCaptureWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000135; };
+		1000000136 /* OrbitWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 3000000001; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		9000000000 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 7000000000 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5000000001;
+			remoteInfo = OrbitWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		5000000103 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1000000136 /* OrbitWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2000000100 /* ScheduleAssistantApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleAssistantApp.swift; sourceTree = "<group>"; };
@@ -64,6 +96,15 @@
 		2000000129 /* OrbitPink@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "OrbitPink@3x.png"; sourceTree = "<group>"; };
 		2000000108 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		3000000000 /* ScheduleAssistant.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ScheduleAssistant.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2000000130 /* RemindersService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemindersService.swift; sourceTree = "<group>"; };
+		2000000131 /* HabitDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HabitDetailSheet.swift; sourceTree = "<group>"; };
+		2000000132 /* DailyBriefing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyBriefing.swift; sourceTree = "<group>"; };
+		2000000133 /* OrbitShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitShortcuts.swift; sourceTree = "<group>"; };
+		2000000137 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		2000000134 /* OrbitWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitWidgetBundle.swift; sourceTree = "<group>"; };
+		2000000135 /* OrbitQuickCaptureWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OrbitQuickCaptureWidget.swift; sourceTree = "<group>"; };
+		2000000136 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		3000000001 /* OrbitWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OrbitWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -71,6 +112,7 @@
 			isa = PBXGroup;
 			children = (
 				4000000001 /* ScheduleAssistant */,
+				4000000005 /* OrbitWidget */,
 				4000000003 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -104,6 +146,11 @@
 				2000000118 /* ScheduleListView.swift */,
 				2000000119 /* UsageGuideView.swift */,
 				2000000107 /* SettingsView.swift */,
+				2000000130 /* RemindersService.swift */,
+				2000000131 /* HabitDetailSheet.swift */,
+				2000000132 /* DailyBriefing.swift */,
+				2000000133 /* OrbitShortcuts.swift */,
+				2000000137 /* KeychainService.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -125,10 +172,21 @@
 			path = AlternateIcons;
 			sourceTree = "<group>";
 		};
+		4000000005 /* OrbitWidget */ = {
+			isa = PBXGroup;
+			children = (
+				2000000134 /* OrbitWidgetBundle.swift */,
+				2000000135 /* OrbitQuickCaptureWidget.swift */,
+				2000000136 /* Info.plist */,
+			);
+			path = OrbitWidget;
+			sourceTree = "<group>";
+		};
 		4000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				3000000000 /* ScheduleAssistant.app */,
+				3000000001 /* OrbitWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -143,15 +201,34 @@
 				5000000100 /* Sources */,
 				5000000101 /* Frameworks */,
 				5000000102 /* Resources */,
+				5000000103 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				8000000000 /* PBXTargetDependency */,
 			);
 			name = ScheduleAssistant;
 			productName = ScheduleAssistant;
 			productReference = 3000000000 /* ScheduleAssistant.app */;
 			productType = "com.apple.product-type.application";
+		};
+		5000000001 /* OrbitWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6000000001;
+			buildPhases = (
+				5000000110 /* Sources */,
+				5000000111 /* Frameworks */,
+				5000000112 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = OrbitWidget;
+			productName = OrbitWidget;
+			productReference = 3000000001 /* OrbitWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -175,6 +252,7 @@
 			mainGroup = 4000000000;
 			targets = (
 				5000000000 /* ScheduleAssistant */,
+				5000000001 /* OrbitWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -199,6 +277,20 @@
 				1000000118 /* ScheduleListView.swift in Sources */,
 				1000000119 /* UsageGuideView.swift in Sources */,
 				1000000107 /* SettingsView.swift in Sources */,
+				1000000130 /* RemindersService.swift in Sources */,
+				1000000131 /* HabitDetailSheet.swift in Sources */,
+				1000000132 /* DailyBriefing.swift in Sources */,
+				1000000133 /* OrbitShortcuts.swift in Sources */,
+				1000000137 /* KeychainService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5000000110 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1000000134 /* OrbitWidgetBundle.swift in Sources */,
+				1000000135 /* OrbitQuickCaptureWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -206,6 +298,13 @@
 
 /* Begin PBXFrameworksBuildPhase section */
 		5000000101 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5000000111 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -233,7 +332,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		5000000112 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8000000000 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5000000001 /* OrbitWidget */;
+			targetProxy = 9000000000 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		6000000100 /* Debug */ = {
@@ -303,6 +417,42 @@
 			};
 			name = Release;
 		};
+		6000000102 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OrbitWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.scheduleassistant.OrbitWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Debug;
+		};
+		6000000103 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = OrbitWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.scheduleassistant.OrbitWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1";
+			};
+			name = Release;
+		};
 		6000000200 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -350,6 +500,15 @@
 			buildConfigurations = (
 				6000000100 /* Debug */,
 				6000000101 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6000000001 /* Build configuration list for PBXNativeTarget "OrbitWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6000000102 /* Debug */,
+				6000000103 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
