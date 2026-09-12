@@ -93,8 +93,10 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        isLoadingWeather = false
-        weatherText = "天气暂时无法获取"
+        Task { @MainActor [weak self] in
+            self?.isLoadingWeather = false
+            self?.weatherText = "天气暂时无法获取"
+        }
     }
 
     private func loadWeather(for location: CLLocation) async {
