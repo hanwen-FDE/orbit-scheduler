@@ -92,7 +92,7 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         Task { await loadWeather(for: location) }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         isLoadingWeather = false
         weatherText = "天气暂时无法获取"
     }
@@ -260,3 +260,4 @@ struct DailyBriefingCard: View {
         )
     }
 }
+
