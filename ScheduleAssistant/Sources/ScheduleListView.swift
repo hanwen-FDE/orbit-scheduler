@@ -88,33 +88,9 @@ struct OrbitNotificationCenterView: View {
                     ContentUnavailableView("暂无通知", systemImage: "bell", description: Text("日程提醒、每日简报和失败信息会出现在这里。"))
                 } else {
                     List {
-                        ForEach(store.items) { item in
-                            Button {
-                                store.markRead(item.id)
-                                // 有关联日程卡片的通知：关闭通知中心并跳去那张卡片打开编辑。
-                                if let messageId = item.relatedMessageId {
-                                    chat.pendingFocusMessageId = messageId
-                                    dismiss()
-                                }
-                            } label: {
-                                HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: item.kind.icon)
-                                        .foregroundStyle(color(for: item.kind))
-                                        .frame(width: 28, height: 28)
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        HStack {
-                                            Text(item.title).font(.headline)
-                                            if !item.isRead { Circle().fill(orbitAccent()).frame(width: 7, height: 7) }
-                                        }
-                                        Text(item.detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
-                                        Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
-                                            .font(.caption2).foregroundStyle(.tertiary)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .onDelete(perform: store.delete)
+                        // 分两组固定结构：每组只显示标题 + 最近一条，不随数量增长。
+                        notificationGroup(title: "通知", items: store.items.filter { $0.kind != .briefing })
+                        notificationGroup(title: "简报", items: store.items.filter { $0.kind == .briefing })
                     }
                 }
             }
@@ -125,6 +101,46 @@ struct OrbitNotificationCenterView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     if store.unreadCount > 0 { Button("全部已读") { store.markAllRead() } }
                 }
+            }
+        }
+    }
+
+    private func notificationGroup(title: String, items: [OrbitNotificationItem]) -> some View {
+        Section(title) {
+            if let latest = items.first {
+                Button {
+                    store.markRead(latest.id)
+                    // 有关联日程卡片的通知：关闭通知中心并跳去那张卡片打开编辑。
+                    if let messageId = latest.relatedMessageId {
+                        chat.pendingFocusMessageId = messageId
+                        dismiss()
+                    }
+                } label: {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: latest.kind.icon)
+                            .foregroundStyle(color(for: latest.kind))
+                            .frame(width: 28, height: 28)
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(latest.title).font(.headline)
+                                if !latest.isRead { Circle().fill(orbitAccent()).frame(width: 7, height: 7) }
+                            }
+                            Text(latest.detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
+                            Text(latest.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption2).foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+                if items.count > 1 {
+                    Text("还有 \(items.count - 1) 条同类记录")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+            } else {
+                Text("暂无")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
             }
         }
     }

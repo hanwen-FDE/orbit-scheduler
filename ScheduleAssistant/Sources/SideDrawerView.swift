@@ -195,10 +195,6 @@ struct SideDrawerView: View {
         return morningResult + "\n" + eveningResult
     }
 
-    private func timeText(_ time: (hour: Int, minute: Int)) -> String {
-        String(format: "%02d:%02d", time.hour, time.minute)
-    }
-
     private func enableDailyNotifications() async -> String {
         let morning = app.morningBriefingTime
         let evening = app.eveningBriefingTime
