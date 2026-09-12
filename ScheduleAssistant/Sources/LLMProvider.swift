@@ -281,7 +281,7 @@ final class LLMSettings: ObservableObject {
         }
 
         for provider in providers {
-            let account = keychainAccount(for: provider.id)
+            let account = Self.keychainAccount(for: provider.id)
             if let secureKey = KeychainService.read(account: account) {
                 var config = loaded[provider.id] ?? LLMProviderConfig()
                 config.apiKey = secureKey
@@ -311,7 +311,7 @@ final class LLMSettings: ObservableObject {
         var redacted = configs
         for provider in providers {
             guard let config = configs[provider.id] else { continue }
-            let account = keychainAccount(for: provider.id)
+            let account = Self.keychainAccount(for: provider.id)
             if config.apiKey.isEmpty {
                 KeychainService.delete(account: account)
                 continue
@@ -326,7 +326,8 @@ final class LLMSettings: ObservableObject {
         }
     }
 
-    private func keychainAccount(for providerId: String) -> String {
+    private static func keychainAccount(for providerId: String) -> String {
         "orbit.llm.api-key.\(providerId)"
     }
 }
+
