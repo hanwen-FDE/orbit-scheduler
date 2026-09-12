@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum ChatRole: String, Codable {
     case user, assistant
