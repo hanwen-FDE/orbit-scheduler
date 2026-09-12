@@ -30,10 +30,25 @@ struct ScheduleAssistantApp: App {
 struct OrbitRootView: View {
     @EnvironmentObject private var chat: ChatStore
     @ObservedObject private var app = AppSettings.shared
+    @State private var showChat = false
 
     var body: some View {
-        ChatView()
+        TodayScheduleView(onOpenChat: { showChat = true })
             .tint(orbitAccent())
+            .fullScreenCover(isPresented: $showChat) {
+                ChatView(onClose: { showChat = false })
+            }
+            .onOpenURL { url in
+                OrbitDeepLink.accept(url)
+                routeByShortcut()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .orbitShortcutRequested)) { _ in
+                routeByShortcut()
+            }
+            .onChange(of: chat.pendingFocusMessageId) { _, newValue in
+                // 从通知中心跳日程卡片：确保对话页已打开，ChatView 会接管并打开编辑。
+                if newValue != nil { showChat = true }
+            }
             .fullScreenCover(isPresented: Binding(
                 get: { !app.onboardingCompleted },
                 set: { if !$0 { app.onboardingCompleted = true } }
@@ -45,5 +60,14 @@ struct OrbitRootView: View {
                     }
                 }
             }
+    }
+
+    /// 只看请求不消费：compose 打开对话页，today 回到今天页；真正消费在 ChatView。
+    private func routeByShortcut() {
+        switch OrbitShortcutRequest.peek() {
+        case .compose: showChat = true
+        case .today: showChat = false
+        case nil: break
+        }
     }
 }

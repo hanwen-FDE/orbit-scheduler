@@ -16,6 +16,12 @@ enum OrbitShortcutRequest {
         NotificationCenter.default.post(name: .orbitShortcutRequested, object: nil)
     }
 
+    /// 只查看当前请求但不消费，供根视图做导航路由。
+    static func peek() -> OrbitShortcutDestination? {
+        guard let raw = UserDefaults.standard.string(forKey: destinationKey) else { return nil }
+        return OrbitShortcutDestination(rawValue: raw)
+    }
+
     static func consume() -> OrbitShortcutDestination? {
         defer { UserDefaults.standard.removeObject(forKey: destinationKey) }
         guard let raw = UserDefaults.standard.string(forKey: destinationKey) else { return nil }

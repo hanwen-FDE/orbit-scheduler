@@ -11,7 +11,7 @@ enum MessageKind: String, Codable {
     case eveningBriefing
 }
 
-/// 全局主题预设（参考截图色板）：一行 6 个纯色圆点，默认蓝。
+/// 全局主题预设（参照 MindKit 色板）：7 个清爽色点，默认蓝。
 enum OrbitThemePreset: String, CaseIterable, Identifiable {
     case blue
     case red
@@ -19,17 +19,19 @@ enum OrbitThemePreset: String, CaseIterable, Identifiable {
     case yellow
     case purple
     case skyBlue
+    case deepBlue
 
     var id: String { rawValue }
 
     var accent: Color {
         switch self {
-        case .blue: return Color(red: 0.24, green: 0.43, blue: 0.96)   // #3D6DF5
-        case .red: return Color(red: 0.90, green: 0.28, blue: 0.30)    // #E5484D
-        case .green: return Color(red: 0.24, green: 0.73, blue: 0.38)  // #3DBB61
-        case .yellow: return Color(red: 0.96, green: 0.77, blue: 0.24) // #F5C53D
-        case .purple: return Color(red: 0.36, green: 0.31, blue: 0.83) // #5B4FD4
-        case .skyBlue: return Color(red: 0.42, green: 0.72, blue: 0.91) // #6BB8E8
+        case .blue: return Color(red: 0.18, green: 0.49, blue: 0.96)     // #2F7CF6
+        case .red: return Color(red: 0.94, green: 0.29, blue: 0.24)      // #F04A3E
+        case .green: return Color(red: 0.31, green: 0.77, blue: 0.36)    // #4FC55B
+        case .yellow: return Color(red: 0.96, green: 0.77, blue: 0.19)   // #F5C531
+        case .purple: return Color(red: 0.36, green: 0.31, blue: 0.83)   // #5B4FD4
+        case .skyBlue: return Color(red: 0.36, green: 0.76, blue: 0.94)  // #5BC2F0
+        case .deepBlue: return Color(red: 0.15, green: 0.39, blue: 0.92) // #2563EB
         }
     }
 }
@@ -143,7 +145,7 @@ enum OrbitNotificationKind: String, Codable, CaseIterable {
     var title: String {
         switch self {
         case .reminder: return "日程提醒"
-        case .briefing: return "每日简报"
+        case .briefing: return "简报"
         case .conflict: return "时间冲突"
         case .writeFailure: return "写入失败"
         case .aiFailure: return "AI 处理失败"
@@ -326,6 +328,14 @@ extension Date {
         if cal.isDateInToday(self) { return "今天" }
         if cal.isDateInTomorrow(self) { return "明天" }
         if cal.isDate(self, inSameDayAs: cal.date(byAdding: .day, value: 2, to: Date()) ?? self) { return "后天" }
+        let fmt = DateFormatter()
+        fmt.locale = Locale(identifier: "zh_CN")
+        fmt.dateFormat = "M月d日 EEE"
+        return fmt.string(from: self)
+    }
+
+    /// 卡片固定格式日期："9月14日 周一"。不随“今天/明天/下周三”等说法变化。
+    var cardDay: String {
         let fmt = DateFormatter()
         fmt.locale = Locale(identifier: "zh_CN")
         fmt.dateFormat = "M月d日 EEE"

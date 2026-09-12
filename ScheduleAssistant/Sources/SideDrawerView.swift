@@ -15,8 +15,7 @@ struct SideDrawerView: View {
         NavigationStack {
             List {
                 themeSection
-                calendarSection
-                schedulePreferenceSection
+                defaultSettingsSection
                 briefingSection
                 Section {
                     NavigationLink("使用教程") { UsageGuideView() }
@@ -55,14 +54,67 @@ struct SideDrawerView: View {
         }
     }
 
-    private var schedulePreferenceSection: some View {
+
+
+    // MARK: - 主题色
+
+    private var themeSection: some View {
         Section {
+            HStack(spacing: 18) {
+                ForEach(OrbitThemePreset.allCases) { preset in
+                    Button {
+                        app.theme = preset
+                    } label: {
+                        Circle()
+                            .fill(preset.accent)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                if app.theme == preset {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                }
+                            }
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 6)
+        } header: {
+            Text("主题配色")
+        }
+    }
+
+    // MARK: - 默认设置（日历与提醒 / 作息时间 / 简报推送）
+
+    private var defaultSettingsSection: some View {
+        Section {
+            Picker("默认日历", selection: $app.defaultCalendarId) {
+                Text("未选择").tag(Optional<String>.none)
+                ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
+                    Text(cal.title).tag(Optional(cal.calendarIdentifier))
+                }
+            }
+            Picker("默认提醒", selection: $app.defaultReminderMinutes) {
+                ForEach(ReminderOption.allCases) { option in
+                    Text(option.label).tag(option.minutes ?? 0)
+                }
+            }
             DatePicker("通常起床", selection: wakeTime, displayedComponents: .hourAndMinute)
             DatePicker("通常睡觉", selection: sleepTime, displayedComponents: .hourAndMinute)
+            Button("设置每日推送提醒") {
+                Task { briefingReminderStatus = await enableDailyNotifications() }
+            }
+            if !briefingReminderStatus.isEmpty {
+                Text(briefingReminderStatus)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         } header: {
-            Text("作息时间")
+            Text("默认设置")
         } footer: {
-            Text("作息决定早报（起床后 30 分钟）与晚报（睡前 30 分钟）的推送时间，也用于筛选合理的冲突重排建议；不会自动创建“习惯”或作息日程。")
+            Text("作息决定早报（起床后 30 分钟）与晚报（睡前 30 分钟）的推送时间，也用于筛选合理的冲突重排建议。")
         }
     }
 
@@ -96,54 +148,6 @@ struct SideDrawerView: View {
         )
     }
 
-    // MARK: - 主题色
-
-    private var themeSection: some View {
-        Section {
-            HStack(spacing: 18) {
-                ForEach(OrbitThemePreset.allCases) { preset in
-                    Button {
-                        app.theme = preset
-                    } label: {
-                        Circle()
-                            .fill(preset.accent)
-                            .frame(width: 30, height: 30)
-                            .overlay {
-                                if app.theme == preset {
-                                    Image(systemName: "checkmark")
-                                        .font(.caption2.bold())
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.vertical, 6)
-        } header: {
-            Text("主题配色")
-        }
-    }
-
-    // MARK: - 默认日历与提醒
-
-    private var calendarSection: some View {
-        Section("默认日历与提醒") {
-            Picker("默认日历", selection: $app.defaultCalendarId) {
-                Text("未选择").tag(Optional<String>.none)
-                ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
-                    Text(cal.title).tag(Optional(cal.calendarIdentifier))
-                }
-            }
-            Picker("默认提醒", selection: $app.defaultReminderMinutes) {
-                ForEach(ReminderOption.allCases) { option in
-                    Text(option.label).tag(option.minutes ?? 0)
-                }
-            }
-        }
-    }
-
     // MARK: - 每日简报
 
     private var briefingSection: some View {
@@ -165,19 +169,11 @@ struct SideDrawerView: View {
                 Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
                 Toggle("显示鼓励语", isOn: $app.morningBriefingShowsEncouragement)
                 Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
-                Button("设置每日推送提醒") {
-                    Task { briefingReminderStatus = await enableDailyNotifications() }
-                }
-                if !briefingReminderStatus.isEmpty {
-                    Text(briefingReminderStatus)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
             }
         } header: {
-            Text("每日简报")
+            Text("简报设置")
         } footer: {
-            Text("简报以对话卡片形式出现在对话窗口；系统通知只负责提醒你打开 Orbit。")
+            Text("简报以对话卡片形式出现在对话窗口；推送时间的开关在上方“默认设置”里。")
         }
     }
 

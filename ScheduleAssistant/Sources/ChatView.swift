@@ -9,7 +9,7 @@ struct ChatView: View {
     @StateObject private var speech = SpeechService()
     @StateObject private var briefing = DailyBriefingStore()
     @ObservedObject private var app = AppSettings.shared
-    @State private var showToday = false
+    var onClose: (() -> Void)? = nil
 
     @State private var inputText = ""
     @State private var showPlusPanel = false
@@ -35,27 +35,28 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showDrawer = true } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.primary)
+                    HStack(spacing: 14) {
+                        if let onClose {
+                            Button(action: onClose) {
+                                Image(systemName: "chevron.backward")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundStyle(.primary)
+                            }
+                            .accessibilityLabel("回到今天")
+                        }
+                        Button { showDrawer = true } label: {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.primary)
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 14) {
-                        Button { showToday = true } label: {
-                            Image(systemName: "calendar.day.timeline.left")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundStyle(.primary)
-                        }
-                        .accessibilityLabel("查看今天日程")
-                        NotificationBellButton(isPresented: $showNotifications)
-                    }
+                    NotificationBellButton(isPresented: $showNotifications)
                 }
             }
         }
         .sheet(isPresented: $showDrawer) { SideDrawerView() }
-        .fullScreenCover(isPresented: $showToday) { TodayScheduleView(embeddedMode: true) }
         .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
         .sheet(isPresented: $showPlusPanel) { plusPanel }
         .sheet(isPresented: $showCamera) { CameraPicker { sendImage($0) } }
@@ -78,10 +79,6 @@ struct ChatView: View {
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             refreshBriefingAndHandleShortcut()
-        }
-        .onOpenURL { url in
-            OrbitDeepLink.accept(url)
-            handleShortcutRequest()
         }
         .onReceive(NotificationCenter.default.publisher(for: .orbitShortcutRequested)) { _ in
             handleShortcutRequest()
@@ -316,7 +313,7 @@ struct ChatView: View {
         case .compose:
             DispatchQueue.main.async { inputFocused = true }
         case .today:
-            showToday = true
+            onClose?()
         }
     }
 }

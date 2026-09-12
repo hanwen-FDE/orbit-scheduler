@@ -40,7 +40,7 @@ struct MessageRow: View {
                 Text(message.text)
                     .padding(.horizontal, 14).padding(.vertical, 10)
                     .foregroundStyle(.white)
-                    .background(bubbleShape.fill(.blue))
+                    .background(bubbleShape.fill(orbitAccent()))
             }
         case .image:
             if let data = message.imageData, let ui = UIImage(data: data) {
@@ -199,7 +199,7 @@ struct EventCardView: View {
             // 第 2 行：左“日期 周几”、右“起–止”（24 小时制），整行主题色
             Button(action: onTap) {
                 HStack(spacing: 8) {
-                    Text(snapshot.start.friendlyDay)
+                    Text(snapshot.start.cardDay)
                         .font(.subheadline.weight(.medium))
                     Spacer(minLength: 0)
                     Text(timeRangeText)
@@ -244,6 +244,10 @@ struct EventCardView: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         if snapshot.reminderMinutes != nil {
+                            // “提前”是普通灰字，放在 Menu 外面，避免被菜单 tint 染成主题色。
+                            Text("提前")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                             Menu {
                                 ForEach(ReminderOption.allCases) { option in
                                     Button {
@@ -259,14 +263,9 @@ struct EventCardView: View {
                                     }
                                 }
                             } label: {
-                                HStack(spacing: 3) {
-                                    Text("提前")
-                                        .font(.subheadline)
-                                        .foregroundStyle(.secondary)
-                                    Text(reminderValueLabel)
-                                        .font(.subheadline.bold())
-                                        .foregroundStyle(orbitAccent())
-                                }
+                                Text(reminderValueLabel)
+                                    .font(.subheadline.bold())
+                                    .foregroundStyle(orbitAccent())
                             }
                         } else {
                             Text("已关闭")

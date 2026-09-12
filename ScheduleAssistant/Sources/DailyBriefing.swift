@@ -296,7 +296,7 @@ struct DailyBriefingCard: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color.blue.opacity(0.08))
+                .fill(orbitAccent().opacity(0.10))
         )
     }
 }
