@@ -195,13 +195,4 @@ struct SideDrawerView: View {
         return morningResult + "\n" + eveningResult
     }
 
-    private func enableDailyNotifications() async -> String {
-        let morning = app.morningBriefingTime
-        let evening = app.eveningBriefingTime
-        let morningResult = await MorningBriefingScheduler.enable(
-            hour: morning.hour, minute: morning.minute)
-        let eveningResult = await EveningBriefingScheduler.enable(
-            hour: evening.hour, minute: evening.minute)
-        return morningResult + "\n" + eveningResult
-    }
 }
