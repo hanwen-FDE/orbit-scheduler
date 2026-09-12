@@ -41,7 +41,7 @@ enum OrbitDeepLink {
 /// “快速记录”会打开 App，而不是在后台直接创建日程；用户始终能看到并确认写入结果。
 struct OpenOrbitComposerIntent: AppIntent {
     static var title: LocalizedStringResource = "快速记录日程"
-    static let supportedModes: IntentModes = .foreground
+    static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         OrbitShortcutRequest.prepare(.compose)
@@ -51,7 +51,7 @@ struct OpenOrbitComposerIntent: AppIntent {
 
 struct OpenOrbitTodayIntent: AppIntent {
     static var title: LocalizedStringResource = "查看今日日程"
-    static let supportedModes: IntentModes = .foreground
+    static let openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
         OrbitShortcutRequest.prepare(.today)
@@ -84,3 +84,4 @@ struct OrbitShortcuts: AppShortcutsProvider {
         ]
     }
 }
+
