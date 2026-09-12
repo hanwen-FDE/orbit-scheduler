@@ -75,6 +75,8 @@ struct ProviderConfigView: View {
 /// 反馈邮箱上线前请替换为真实地址。
 struct AppSettingsScreen: View {
     @EnvironmentObject private var settings: LLMSettings
+    @EnvironmentObject private var chat: ChatStore
+    @State private var showDeleteConversationConfirmation = false
 
     var body: some View {
         Form {
@@ -108,6 +110,21 @@ struct AppSettingsScreen: View {
                     .foregroundStyle(.secondary)
             } header: {
                 Text("小组件与快捷指令")
+            }
+
+            Section {
+                Button("删除当前对话", role: .destructive) {
+                    showDeleteConversationConfirmation = true
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } header: {
+                Text("数据")
+            } footer: {
+                Text("只删除 Orbit 对话记录，不会删除已经写入 Apple 日历的日程。")
+            }
+            .confirmationDialog("删除当前对话？", isPresented: $showDeleteConversationConfirmation, titleVisibility: .visible) {
+                Button("删除对话", role: .destructive) { chat.clearConversation() }
+                Button("取消", role: .cancel) {}
             }
 
             Section {

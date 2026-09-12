@@ -1,6 +1,8 @@
 import SwiftUI
 import EventKit
 
+extension EKEvent: Identifiable {}
+
 @MainActor
 final class OrbitNotificationStore: ObservableObject {
     static let shared = OrbitNotificationStore()
@@ -115,7 +117,7 @@ struct OrbitNotificationCenterView: View {
         } label: {
             VStack(alignment: .leading, spacing: 6) {
                 Text(title)
-                    .font(.title3.bold())
+                    .font(.headline)
                     .foregroundStyle(.primary)
                 if let latest = items.first {
                     Text(latest.detail)
@@ -211,6 +213,8 @@ struct TodayScheduleView: View {
     @State private var events: [EKEvent] = []
     @State private var showNotifications = false
     @State private var showDrawer = false
+    @State private var eventToEdit: EKEvent?
+    @State private var eventToDelete: EKEvent?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -228,7 +232,13 @@ struct TodayScheduleView: View {
                     } else {
                         LazyVStack(spacing: 0) {
                             ForEach(events, id: \.eventIdentifier) { event in
-                                timelineRow(event)
+                                SwipeActionCard {
+                                    eventToDelete = event
+                                } onEdit: {
+                                    eventToEdit = event
+                                } content: {
+                                    timelineRow(event)
+                                }
                                 Divider().padding(.leading, 70)
                             }
                         }
@@ -241,9 +251,7 @@ struct TodayScheduleView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button { showDrawer = true } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.primary)
+                        OrbitBrandMark()
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -251,6 +259,24 @@ struct TodayScheduleView: View {
                 }
             }
         }
+            .sheet(item: $eventToEdit) { event in EKEventEditor(event: event) {
+                Task { await refresh() }
+            } }
+            .confirmationDialog("删除这个日程？", isPresented: Binding(
+                get: { eventToDelete != nil },
+                set: { if !$0 { eventToDelete = nil } }
+            ), titleVisibility: .visible) {
+                Button("删除日程", role: .destructive) {
+                    if let event = eventToDelete {
+                        CalendarService.shared.deleteEvent(snapshot: Self.snapshot(of: event))
+                        Task { await refresh() }
+                    }
+                    eventToDelete = nil
+                }
+                Button("取消", role: .cancel) { eventToDelete = nil }
+            } message: {
+                Text("它会同时从系统日历中删除。")
+            }
             .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
             .sheet(isPresented: $showDrawer) { SideDrawerView() }
             .task { await refresh() }
@@ -339,6 +365,84 @@ struct TodayScheduleView: View {
         if value.contains("工作") || value.contains("上班") { return "💼" }
         if value.contains("睡") || value.contains("起床") { return "⏰" }
         return "📅"
+    }
+}
+
+extension TodayScheduleView {
+    /// 把系统日历事件包成快照，供删除/编辑复用 ChatStore 之外的日历服务。
+    static func snapshot(of event: EKEvent) -> EventSnapshot {
+        EventSnapshot(
+            title: event.title ?? "未命名日程",
+            emoji: "📅",
+            start: event.startDate,
+            end: event.endDate,
+            isAllDay: event.isAllDay,
+            location: event.location,
+            notes: event.notes,
+            reminderMinutes: event.alarms?.first.map { Int(-$0.relativeOffset / 60) },
+            calendarIdentifier: event.calendar.calendarIdentifier,
+            calendarTitle: event.calendar.title,
+            eventIdentifier: event.eventIdentifier
+        )
+    }
+}
+
+/// “今天”页的轻量编辑：不依赖聊天卡片，直接改系统日历。
+struct EKEventEditor: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let event: EKEvent
+    var onDone: () -> Void
+
+    @State private var title: String
+    @State private var location: String
+    @State private var start: Date
+    @State private var end: Date
+
+    init(event: EKEvent, onDone: @escaping () -> Void) {
+        self.event = event
+        self.onDone = onDone
+        _title = State(initialValue: event.title ?? "")
+        _location = State(initialValue: event.location ?? "")
+        _start = State(initialValue: event.startDate)
+        _end = State(initialValue: max(event.endDate, event.startDate))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("日程") {
+                    TextField("标题", text: $title)
+                    TextField("地点（可选）", text: $location)
+                }
+                Section("时间") {
+                    DatePicker("开始", selection: $start)
+                    DatePicker("结束", selection: $end, in: start...)
+                }
+                Section {
+                    Button("保存修改") { save() }
+                        .frame(maxWidth: .infinity)
+                        .font(.headline)
+                }
+            }
+            .navigationTitle("编辑日程")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("取消") { dismiss() } }
+            }
+        }
+        .presentationDetents([.large])
+    }
+
+    private func save() {
+        var snap = TodayScheduleView.snapshot(of: event)
+        snap.title = title.trimmingCharacters(in: .whitespaces)
+        snap.location = location.isEmpty ? nil : location
+        snap.start = start
+        snap.end = end <= start ? start.addingTimeInterval(3600) : end
+        CalendarService.shared.updateEvent(&snap)
+        dismiss()
+        onDone()
     }
 }
 

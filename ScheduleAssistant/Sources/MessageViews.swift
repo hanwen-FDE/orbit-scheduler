@@ -1,7 +1,96 @@
 import SwiftUI
+import UIKit
+
+/// 通用滑动手势容器：长按激活后，右滑露出红色删除、左滑露出主题色详情编辑。
+/// 对话卡片与“今天”列表行共用，保证交互一致。
+struct SwipeActionCard<Content: View>: View {
+    var onDelete: () -> Void
+    var onEdit: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    @State private var armed = false
+    @State private var offsetX: CGFloat = 0
+
+    private let revealThreshold: CGFloat = 56
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 0) {
+                actionButton(color: .red, icon: "trash.fill", visible: offsetX > 20) {
+                    reset()
+                    onDelete()
+                }
+                .frame(width: 72)
+                Spacer(minLength: 0)
+                actionButton(color: orbitAccent(), icon: "pencil", visible: offsetX < -20) {
+                    reset()
+                    onEdit()
+                }
+                .frame(width: 72)
+            }
+            content()
+                .scaleEffect(armed ? 0.985 : 1)
+                .shadow(color: .black.opacity(armed ? 0.12 : 0), radius: armed ? 6 : 0, y: 2)
+                .offset(x: offsetX)
+        }
+        .contentShape(Rectangle())
+        .onLongPressGesture(minimumDuration: 0.3) {
+            withAnimation(.easeOut(duration: 0.15)) { armed = true }
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+        .onTapGesture {
+            if armed || abs(offsetX) > 1 { reset() }
+        }
+        .gesture(armed ? drag : nil)
+    }
+
+    private var drag: some Gesture {
+        DragGesture(minimumDistance: 8)
+            .onChanged { value in
+                guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                withAnimation(.easeOut(duration: 0.1)) {
+                    offsetX = min(120, max(-120, value.translation.width))
+                }
+            }
+            .onEnded { value in
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    if value.translation.width > revealThreshold {
+                        offsetX = 80
+                    } else if value.translation.width < -revealThreshold {
+                        offsetX = -80
+                    } else {
+                        offsetX = 0
+                        armed = false
+                    }
+                }
+            }
+    }
+
+    private func reset() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+            offsetX = 0
+            armed = false
+        }
+    }
+
+    @ViewBuilder
+    private func actionButton(color: Color, icon: String, visible: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 56, height: 44)
+                .background(Capsule().fill(color))
+                .opacity(visible ? 1 : 0)
+                .scaleEffect(visible ? 1 : 0.6)
+        }
+        .buttonStyle(.plain)
+    }
+}
 
 /// 单条消息：气泡或日程卡片
 struct MessageRow: View {
+    var onOpenToday: (() -> Void)? = nil
     @EnvironmentObject private var chat: ChatStore
     let message: ChatMessage
     var onTapCard: () -> Void
@@ -62,29 +151,19 @@ struct MessageRow: View {
             .foregroundStyle(.white)
             .background(bubbleShape.fill(orbitAccent()))
         case .briefing:
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("今日简报", systemImage: "sun.max.fill")
-                        .font(.headline).foregroundStyle(orbitAccent())
-                    Spacer()
-                    Text(message.createdAt.shortTime).font(.caption).foregroundStyle(.secondary)
-                }
-                Text(message.text).font(.subheadline)
+            Button(action: { onOpenToday?() }) {
+                briefingBody(title: "今日早报", icon: "sun.max.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 20).fill(orbitAccent().opacity(0.10)))
+            .buttonStyle(.plain)
         case .eveningBriefing:
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Label("今日晚报", systemImage: "moon.stars.fill")
-                        .font(.headline).foregroundStyle(orbitAccent())
-                    Spacer()
-                    Text(message.createdAt.shortTime).font(.caption).foregroundStyle(.secondary)
-                }
-                Text(message.text).font(.subheadline)
+            Button(action: { onOpenToday?() }) {
+                briefingBody(title: "今日晚报", icon: "moon.stars.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
             }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 20).fill(orbitAccent().opacity(0.10)))
+            .buttonStyle(.plain)
         case .eventCard:
             if let snap = message.event {
                 EventCardView(messageId: message.id, snapshot: snap, onTap: onTapCard)
@@ -94,6 +173,23 @@ struct MessageRow: View {
                 HabitCardView(messageId: message.id, habit: habit)
             }
         }
+    }
+
+    private func briefingBody(title: String, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(title, systemImage: icon)
+                    .font(.headline).foregroundStyle(orbitAccent())
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                Text(message.createdAt.shortTime).font(.caption).foregroundStyle(.secondary)
+            }
+            Text(message.text).font(.subheadline)
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 20).fill(orbitAccent().opacity(0.10)))
     }
 
     private var bubbleShape: some Shape {
@@ -118,6 +214,39 @@ struct EventCardView: View {
     @State private var showRecurringDeleteOptions = false
 
     var body: some View {
+        SwipeActionCard {
+            if snapshot.recurrence != nil {
+                showRecurringDeleteOptions = true
+            } else {
+                showDeleteConfirmation = true
+            }
+        } onEdit: {
+            onTap()
+        } content: {
+            cardContent
+        }
+        .confirmationDialog("删除这个日程？", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
+            Button("删除日程", role: .destructive) {
+                chat.deleteEventMessage(messageId)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("它会同时从「\(snapshot.calendarTitle)」中删除。")
+        }
+        .confirmationDialog("删除循环日程", isPresented: $showRecurringDeleteOptions, titleVisibility: .visible) {
+            Button("只删除这一次", role: .destructive) {
+                chat.deleteEventMessage(messageId)
+            }
+            Button("删除这一次及后续", role: .destructive) {
+                chat.deleteEventMessage(messageId, includingFuture: true)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("选择是否保留后续循环。")
+        }
+    }
+
+    private var cardContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             // 第 1 行：图标 + 标题（点击编辑）
             HStack(alignment: .center, spacing: 10) {
@@ -143,57 +272,7 @@ struct EventCardView: View {
                 .buttonStyle(.plain)
                 .disabled(snapshot.deleted)
 
-                if !snapshot.deleted {
-                    Menu {
-                        Button(action: onTap) {
-                            Label("编辑详情", systemImage: "pencil")
-                        }
-                        if snapshot.eventIdentifier != nil {
-                            if snapshot.nativeReminderIdentifier == nil {
-                                Button {
-                                    chat.syncToNativeReminders(messageId: messageId)
-                                } label: {
-                                    Label("同步到系统提醒事项", systemImage: "checklist")
-                                }
-                            } else {
-                                Button {
-                                    chat.removeNativeReminder(messageId: messageId)
-                                } label: {
-                                    Label("取消提醒事项同步", systemImage: "checklist")
-                                }
-                            }
-                        }
-                        Menu {
-                            ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
-                                Button {
-                                    chat.changeCalendar(messageId: messageId, to: cal.calendarIdentifier)
-                                } label: {
-                                    if cal.calendarIdentifier == snapshot.calendarIdentifier {
-                                        Label(cal.title, systemImage: "checkmark")
-                                    } else {
-                                        Text(cal.title)
-                                    }
-                                }
-                            }
-                        } label: {
-                            Label("移动到其他日历", systemImage: "calendar")
-                        }
-                        Button(role: .destructive) {
-                            if snapshot.recurrence != nil {
-                                showRecurringDeleteOptions = true
-                            } else {
-                                showDeleteConfirmation = true
-                            }
-                        } label: {
-                            Label("删除这个日程", systemImage: "trash")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 32, height: 32)
-                    }
-                }
+
             }
 
             // 第 2 行：左“日期 周几”、右“起–止”（24 小时制），整行主题色
@@ -285,25 +364,6 @@ struct EventCardView: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.systemBackground)))
         .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
-        .confirmationDialog("删除这个日程？", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-            Button("删除日程", role: .destructive) {
-                chat.deleteEventMessage(messageId)
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("它会同时从「\(snapshot.calendarTitle)」中删除。")
-        }
-        .confirmationDialog("删除循环日程", isPresented: $showRecurringDeleteOptions, titleVisibility: .visible) {
-            Button("只删除这一次", role: .destructive) {
-                chat.deleteEventMessage(messageId)
-            }
-            Button("删除这一次及后续", role: .destructive) {
-                chat.deleteEventMessage(messageId, includingFuture: true)
-            }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("选择是否保留后续循环。")
-        }
     }
 
     /// 第 2 行右侧的时间段；日期在左侧单独显示。
@@ -344,6 +404,13 @@ struct EventCardView: View {
                             .font(.caption.bold())
                             .foregroundStyle(orbitAccent())
                     }
+                }
+                Button {
+                    chat.ignoreConflicts(messageId: messageId)
+                } label: {
+                    Text("忽略")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
                 }
             }
         }

@@ -94,6 +94,35 @@ struct EventDetailSheet: View {
                         }
                     }
                 }
+                Section("更多操作") {
+                    if snapshot.eventIdentifier != nil {
+                        if snapshot.nativeReminderIdentifier == nil {
+                            Button {
+                                chat.syncToNativeReminders(messageId: messageId)
+                                dismiss()
+                            } label: {
+                                Label("同步到系统提醒事项", systemImage: "checklist")
+                            }
+                        } else {
+                            Button(role: .destructive) {
+                                chat.removeNativeReminder(messageId: messageId)
+                                dismiss()
+                            } label: {
+                                Label("取消提醒事项同步", systemImage: "checklist")
+                            }
+                        }
+                        Menu {
+                            ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
+                                Button(cal.title) {
+                                    chat.changeCalendar(messageId: messageId, to: cal.calendarIdentifier)
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            Label("移动到其他日历", systemImage: "calendar")
+                        }
+                    }
+                }
                 Section {
                     Button("保存修改", action: save)
                         .frame(maxWidth: .infinity)

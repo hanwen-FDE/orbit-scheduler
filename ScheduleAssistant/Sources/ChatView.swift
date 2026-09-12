@@ -11,6 +11,8 @@ struct ChatView: View {
     @ObservedObject private var app = AppSettings.shared
     var onClose: (() -> Void)? = nil
 
+    private enum InputMode { case voice, keyboard }
+    @State private var inputMode: InputMode = .voice
     @State private var inputText = ""
     @State private var showPlusPanel = false
     @State private var showDrawer = false
@@ -35,19 +37,17 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 14) {
+                    HStack(spacing: 12) {
                         if let onClose {
                             Button(action: onClose) {
                                 Image(systemName: "chevron.backward")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(size: 17, weight: .semibold))
                                     .foregroundStyle(.primary)
                             }
                             .accessibilityLabel("回到今天")
                         }
                         Button { showDrawer = true } label: {
-                            Image(systemName: "person.crop.circle")
-                                .font(.system(size: 22))
-                                .foregroundStyle(.primary)
+                            OrbitBrandMark()
                         }
                     }
                 }
@@ -56,6 +56,7 @@ struct ChatView: View {
                 }
             }
         }
+        .modifier(EdgeSwipeBack { onClose?() })
         .sheet(isPresented: $showDrawer) { SideDrawerView() }
         .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
         .sheet(isPresented: $showPlusPanel) { plusPanel }
@@ -94,7 +95,8 @@ struct ChatView: View {
                     ForEach(chat.messages) { msg in
                         MessageRow(
                             message: msg,
-                            onTapCard: { editingMessage = msg }
+                            onTapCard: { editingMessage = msg },
+                            onOpenToday: { onClose?() }
                         )
                         .id(msg.id)
                     }
@@ -132,53 +134,37 @@ struct ChatView: View {
         .onTapGesture { inputFocused = false }
     }
 
-    // MARK: - 底部输入栏
+    // MARK: - 底部输入栏（辐条悬浮胶囊：＋ / 语音长条或键盘 / 模式切换圆钮）
 
     private var inputBar: some View {
-        Group {
-            if speech.isRecording {
-                recordingBar
-            } else {
-                HStack(spacing: 10) {
-                    Button {
-                        inputFocused = false
-                        showPlusPanel = true
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 17, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                            .background(Circle().fill(Color(.systemBackground)))
-                    }
-                    TextField("安排点什么？", text: $inputText, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...4)
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Capsule().fill(Color(.systemBackground)))
-                        .focused($inputFocused)
-                        .onSubmit(sendText)
-                    if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
-                        Button(action: sendText) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 30)).foregroundStyle(orbitAccent())
-                        }
-                    } else {
-                        Button {
-                            discardCurrentRecording = false
-                            recordingStartedAt = Date()
-                            recordingSeconds = 0
-                            speech.start()
-                        } label: {
-                            Image(systemName: "mic.circle.fill")
-                                .font(.system(size: 30)).foregroundStyle(orbitAccent())
-                        }
-                    }
-                }
-                .padding(.horizontal, 12).padding(.vertical, 8)
+        HStack(spacing: 10) {
+            Button {
+                inputFocused = false
+                showPlusPanel = true
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 17, weight: .semibold))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color(.systemBackground)))
             }
+            .buttonStyle(.plain)
+
+            if inputMode == .voice {
+                voiceSegment
+            } else {
+                keyboardSegment
+            }
+
+            modeToggle
         }
-        .animation(.easeInOut(duration: 0.18), value: speech.isRecording)
-        .background(.ultraThinMaterial)
-        .ignoresSafeArea(edges: .bottom)
+        .padding(.horizontal, 6).padding(.vertical, 6)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
+        )
+        .padding(.horizontal, 10)
+        .padding(.bottom, 6)
         .onChange(of: speech.isRecording) { old, new in
             if old && !new {
                 let transcript = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -190,48 +176,115 @@ struct ChatView: View {
         }
     }
 
-    private var recordingBar: some View {
-        VStack(spacing: 9) {
-            HStack {
-                Text(String(format: "%d:%02d", recordingSeconds / 60, recordingSeconds % 60))
-                    .font(.caption.monospacedDigit())
-                TimelineView(.animation(minimumInterval: 0.12)) { timeline in
-                    HStack(spacing: 3) {
-                        ForEach(0..<28, id: \.self) { index in
-                            let phase = timeline.date.timeIntervalSinceReferenceDate * 4 + Double(index)
-                            Capsule()
-                                .fill(index < 20 ? orbitAccent() : Color.secondary.opacity(0.25))
-                                .frame(width: 3, height: 5 + abs(sin(phase)) * 18)
-                        }
+    /// 语音态中间长条：点按开始/结束录音；录音中显示时长与转写。
+    private var voiceSegment: some View {
+        Button {
+            if speech.isRecording {
+                speech.stop()
+            } else {
+                discardCurrentRecording = false
+                recordingStartedAt = Date()
+                recordingSeconds = 0
+                speech.start()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                if speech.isRecording {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(orbitAccent())
+                    Text(String(format: "%d:%02d", recordingSeconds / 60, recordingSeconds % 60))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(orbitAccent())
+                    Text(speech.transcript.isEmpty ? "正在聆听…" : speech.transcript)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Button {
+                        discardCurrentRecording = true
+                        speech.stop()
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.footnote)
+                            .foregroundStyle(.red)
                     }
-                    .frame(maxWidth: .infinity)
+                } else {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(orbitAccent())
+                    Text("点按说话，比如：明天上午十点门诊随访")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            HStack {
-                Button {
-                    discardCurrentRecording = true
-                    speech.stop()
-                } label: {
-                    Image(systemName: "trash").font(.title3)
-                }
-                Spacer()
-                Text(speech.transcript.isEmpty ? "正在聆听…" : speech.transcript)
-                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                Spacer()
-                Button { speech.stop() } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.title3.bold()).foregroundStyle(.white)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(orbitAccent()))
-                }
-            }
+            .padding(.horizontal, 14).padding(.vertical, 9)
+            .background(Capsule(style: .continuous).fill(Color(.systemBackground)))
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .buttonStyle(.plain)
         .task(id: recordingStartedAt) {
             while speech.isRecording {
                 try? await Task.sleep(for: .seconds(1))
                 if speech.isRecording { recordingSeconds += 1 }
             }
+        }
+    }
+
+    /// 键盘态中间长条：文本框 + 发送。
+    private var keyboardSegment: some View {
+        HStack(spacing: 8) {
+            TextField("安排点什么？", text: $inputText, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(1...4)
+                .focused($inputFocused)
+                .onSubmit(sendText)
+            if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button(action: sendText) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundStyle(orbitAccent())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 9)
+        .background(Capsule(style: .continuous).fill(Color(.systemBackground)))
+    }
+
+    /// 右侧圆形切换钮：语音态显示键盘、键盘态显示麦克风。
+    private var modeToggle: some View {
+        Button {
+            inputFocused = false
+            if speech.isRecording { discardCurrentRecording = true; speech.stop() }
+            inputMode = (inputMode == .voice) ? .keyboard : .voice
+        } label: {
+            Image(systemName: inputMode == .voice ? "keyboard" : "mic.fill")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(orbitAccent()))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(inputMode == .voice ? "切换到键盘输入" : "切换到语音输入")
+    }
+
+    /// 左缘右滑返回上一层（对话页全屏浮层用；NavigationStack 子页沿用系统手势）。
+    struct EdgeSwipeBack: ViewModifier {
+        let onBack: () -> Void
+
+        func body(body: Content) -> some View {
+            body
+                .gesture(
+                    DragGesture(minimumDistance: 24, coordinateSpace: .global)
+                        .onEnded { value in
+                            let fromLeftEdge = value.startLocation.x < 32
+                            let horizontal = abs(value.translation.width) > abs(value.translation.height)
+                            if fromLeftEdge, horizontal, value.translation.width > 80 {
+                                onBack()
+                            }
+                        }
+                )
         }
     }
 

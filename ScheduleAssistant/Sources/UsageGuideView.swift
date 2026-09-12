@@ -1,4 +1,6 @@
 import SwiftUI
+import EventKit
+import UIKit
 
 /// 使用说明页面（与新版免确认流程、三行卡片、设置入口保持一致）
 struct UsageGuideView: View {
@@ -24,7 +26,9 @@ struct UsageGuideView: View {
 说得清楚就直接写入 Apple 日历，无需再次确认：
 
 • 点卡片：修改标题、时间、地点或重复规则
-• 点卡片右上角「…」：编辑详情、同步到系统提醒事项、移动日历或删除
+• 长按卡片后右滑：出现红色删除（二次确认后删除）
+• 长按卡片后左滑：出现详情编辑按钮
+• “同步提醒事项、移动日历”在详情编辑页底部
 • 🔔 第 3 行滑动开关：要不要提醒；点亮后可点橙色时长切换“提前 15 分钟 / 1 小时 / 1 天”等
 • 出现「时间重叠」提示时：Orbit 不会私自改动你的时间；可一键点“改为 XX:XX”采用建议，或进编辑页手动调整
 """)
@@ -64,7 +68,7 @@ AI 识别需要大模型的 API Key：
 
 • 日程同时存在于系统日历 App 中，可随时在系统日历查看、编辑。
 
-• 反馈：头像 → 设置 → 联系我们。
+• 修正日程：直接说“改成下午四点”，Orbit 会更新刚才那条日程而不是新建。
 """)
             }
             .padding()
@@ -86,109 +90,121 @@ AI 识别需要大模型的 API Key：
     }
 }
 
-/// 首次教学：轮播式提问作息 → 自动推算简报时间 → 输入方式体验 → 开始使用。
+/// 首次教学（7 页）：总介绍 → 作息 → 播报偏移 → 日历授权 → 多模态录入 → 开始使用。
 struct OnboardingView: View {
     @ObservedObject private var app = AppSettings.shared
     @State private var page = 0
-    @State private var demoText: String?
-    let onComplete: (String?) -> Void
+    @State private var calendarStatus: EKAuthorizationStatus = .notDetermined
+    let onComplete: () -> Void
 
     private let totalPages = 7
+    private let offsetChoices = [5, 10, 15, 20, 30, 45, 60, 90, 120]
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Orbit").font(.headline)
+                OrbitBrandMark()
                 Spacer()
-                Button("跳过") { onComplete(nil) }
+                Button("跳过") { onComplete() }
             }
             .padding()
 
             TabView(selection: $page) {
-                // 第 1 页：起床时间（滚轮选择）
+                // 1. 总介绍：Slogan + 痛点
+                VStack(spacing: 18) {
+                    Ellipse()
+                        .stroke(
+                            LinearGradient(colors: [orbitAccent(), orbitAccent().opacity(0.55)],
+                                           startPoint: .top, endPoint: .bottom),
+                            lineWidth: 5
+                        )
+                        .frame(width: 120, height: 60)
+                        .rotationEffect(.degrees(-43))
+                        .padding(.top, 12)
+                    Text("所有计划，运行于时间轨道")
+                        .font(.largeTitle.bold())
+                    Text("Every plan, on its orbit.")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .italic()
+                    VStack(alignment: .leading, spacing: 10) {
+                        pain("安排散落在聊天、备忘录和脑子里，总是漏")
+                        pain("手动一个个建日程，又慢又麻烦")
+                        pain("两件事撞在同一个时间，没人提醒")
+                    }
+                    .padding(.horizontal, 8)
+                    Text("Orbit：一句话、一段语音、一张图片，直接写进 Apple 日历。")
+                        .font(.headline)
+                        .foregroundStyle(orbitAccent())
+                        .multilineTextAlignment(.center)
+                }
+                .padding(30).tag(0)
+
+                // 2. 起床时间
                 timeQuestionPage(
                     icon: "sun.horizon.fill",
-                    title: "你平时几点起床？",
-                    subtitle: "用下面的滚轮选好就可以滑到下一页",
+                    title: "设置起床时间",
+                    subtitle: "每天这个时候，Orbit 会把早报送进对话：天气 + 今日安排",
                     time: wakeTime
-                ).tag(0)
-
-                // 第 2 页：睡觉时间
-                timeQuestionPage(
-                    icon: "moon.zzz.fill",
-                    title: "你平时几点睡觉？",
-                    subtitle: "Orbit 会避免在这两段时间之外给出重排建议",
-                    time: sleepTime
                 ).tag(1)
 
-                // 第 3 页：确认自动推算的简报时间
-                VStack(spacing: 22) {
+                // 3. 睡觉时间
+                timeQuestionPage(
+                    icon: "moon.zzz.fill",
+                    title: "设置睡觉时间",
+                    subtitle: "睡前 Orbit 会发来晚报，告诉你今天完成了几件事",
+                    time: sleepTime
+                ).tag(2)
+
+                // 4. 播报偏移：先选中，再滚轮
+                VStack(spacing: 18) {
                     onboardingHeader(
                         icon: "newspaper.fill",
-                        title: "每天两份简报",
-                        detail: "根据你的作息自动安排，不需要手动设置时间"
+                        title: "播报时间微调",
+                        detail: "决定早报、晚报距离起床/睡觉多少分钟推送"
                     )
-                    VStack(spacing: 10) {
-                        briefingRow(icon: "sun.max.fill", name: "晨间早报",
-                                    time: app.morningBriefingTime,
-                                    desc: "起床后 30 分钟，汇总今天的安排")
-                        briefingRow(icon: "moon.stars.fill", name: "每日晚报",
-                                    time: app.eveningBriefingTime,
-                                    desc: "睡前 30 分钟，总结今天完成了几项任务")
-                    }
-                    .padding(.horizontal, 30)
+                    offsetPicker(title: "晨报 · 起床后",
+                                 isSelected: app.morningBriefingEnabled,
+                                 selection: $app.morningBriefingOffsetMinutes)
+                    offsetPicker(title: "晚报 · 睡前",
+                                 isSelected: app.eveningBriefingEnabled,
+                                 selection: $app.eveningBriefingOffsetMinutes)
                 }
-                .padding(30).tag(2)
+                .padding(26).tag(3)
 
-                // 第 4 页：文字输入（可一键试用示例）
-                VStack(spacing: 22) {
-                    onboardingHeader(
-                        icon: "text.bubble.fill",
-                        title: "打字就能排日程",
-                        detail: "说清楚时间做的事就行，识别后直接写进日历，不用再点确认"
-                    )
-                    Button {
-                        demoText = "明天上午10点 门诊随访"
-                    } label: {
-                        Label(demoText == nil ? "点一下试试这句话" : "已就绪：明天上午10点 门诊随访",
-                              systemImage: demoText == nil ? "hand.tap" : "checkmark.circle.fill")
-                            .font(.subheadline.bold())
-                            .padding(.horizontal, 16).padding(.vertical, 10)
-                            .background(Capsule().fill(orbitAccent().opacity(0.14)))
-                            .foregroundStyle(orbitAccent())
-                    }
-                    Text("开始使用后会自动发送，体验一次完整的识别流程")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(30).tag(3)
-
-                // 第 5 页：语音输入
-                onboardingPage(
-                    icon: "waveform.circle.fill",
-                    title: "语音输入",
-                    detail: "对话页点右侧麦克风说话，例如“明天下午三点和王医生开会，提前半小时提醒”，松手即自动识别。"
-                ).tag(4)
-
-                // 第 6 页：图片输入
-                onboardingPage(
-                    icon: "photo.on.rectangle.fill",
-                    title: "图片批量录入",
-                    detail: "课程表、会议通知拍照或截图，点 ＋ 选「照片 / 相机」，Orbit 会逐行识别成日程。"
-                ).tag(5)
-
-                // 第 7 页：日历权限 + 开始
-                VStack(spacing: 22) {
+                // 5. 接入 Apple 日历
+                VStack(spacing: 18) {
                     onboardingHeader(
                         icon: "calendar.badge.checkmark",
-                        title: "连接 Apple 日历",
-                        detail: "需要完全访问才能展示今天的安排和识别冲突；Orbit 不会建立重复的日历。"
+                        title: "接入 Apple 日历",
+                        detail: "Orbit 直接读写 iPhone 自带的日历 App，不建立重复副本；授权后日程双向同步，提醒准时到达。"
                     )
-                    Button("允许日历访问") {
-                        Task { _ = await CalendarService.shared.ensureAccess() }
+                    calendarStatusRow
+                }
+                .padding(30).tag(4)
+
+                // 6. 多模态录入（三合一）
+                VStack(spacing: 18) {
+                    onboardingHeader(
+                        icon: "square.stack.3d.up.fill",
+                        title: "支持文字、语音、图片多模态录入",
+                        detail: "打字说一句、点按说一段、拍一张课程表——Orbit 都会识别成日程，直接写进日历。"
+                    )
+                    HStack(spacing: 22) {
+                        modeIcon("character.cursor.ibeam", "文字")
+                        modeIcon("waveform", "语音")
+                        modeIcon("photo", "图片")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(orbitAccent())
+                }
+                .padding(30).tag(5)
+
+                // 7. 开始使用
+                VStack(spacing: 18) {
+                    onboardingHeader(
+                        icon: "sparkles",
+                        title: "准备就绪",
+                        detail: "从今天页右下角的对话气泡开始，把第一件事交给 Orbit。"
+                    )
                 }
                 .padding(30).tag(6)
             }
@@ -202,7 +218,7 @@ struct OnboardingView: View {
                         _ = await MorningBriefingScheduler.enable(hour: morning.hour, minute: morning.minute)
                         _ = await EveningBriefingScheduler.enable(hour: evening.hour, minute: evening.minute)
                     }
-                    onComplete(demoText)
+                    onComplete()
                 } else {
                     withAnimation { page += 1 }
                 }
@@ -213,6 +229,33 @@ struct OnboardingView: View {
             .padding()
         }
         .background(Color(.systemGroupedBackground))
+        .onAppear { calendarStatus = EKEventStore.authorizationStatus(for: .event) }
+    }
+
+    // MARK: - 组件
+
+    private func pain(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "circle.dotted")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func modeIcon(_ icon: String, _ label: String) -> some View {
+        VStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(orbitAccent())
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(orbitAccent().opacity(0.12)))
+            Text(label)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 
     private func timeQuestionPage(icon: String, title: String, subtitle: String, time: Binding<Date>) -> some View {
@@ -228,38 +271,83 @@ struct OnboardingView: View {
         .padding(30)
     }
 
-    private func briefingRow(icon: String, name: String, time: (hour: Int, minute: Int), desc: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(orbitAccent())
-                .frame(width: 36)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 8) {
-                    Text(name).font(.headline)
-                    Text(String(format: "%02d:%02d", time.hour, time.minute))
-                        .font(.subheadline.bold().monospacedDigit())
-                        .foregroundStyle(orbitAccent())
+    /// “先选中再滑动”的播报偏移模块。
+    private func offsetPicker(title: String, isSelected: Bool, selection: Binding<Int>) -> some View {
+        VStack(spacing: 8) {
+            Toggle(isOn: Binding(
+                get: { isSelected },
+                set: { on in
+                    if title.hasPrefix("晨报") { app.morningBriefingEnabled = on }
+                    else { app.eveningBriefingEnabled = on }
                 }
-                Text(desc)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            )) {
+                Text(title)
+                    .font(.headline)
             }
-            Spacer()
+            .tint(orbitAccent())
+            .padding(.horizontal, 6)
+            if isSelected {
+                Picker("", selection: selection) {
+                    ForEach(offsetChoices, id: \.self) { minutes in
+                        Text("\(minutes) 分钟").tag(minutes)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(height: 110)
+                .frame(maxWidth: 220)
+                .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
+            }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemBackground)))
+        .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemBackground)))
     }
 
-    private func onboardingPage(icon: String, title: String, detail: String) -> some View {
-        onboardingHeader(icon: icon, title: title, detail: detail).padding(30)
+    /// 日历授权状态行：未决定 → 请求；被拒 → 去系统设置；已授权 → 绿色对勾。
+    @ViewBuilder
+    private var calendarStatusRow: some View {
+        switch calendarStatus {
+        case .fullAccess, .writeOnly:
+            Label("已连接 Apple 日历", systemImage: "checkmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.green)
+        case .denied, .restricted:
+            VStack(spacing: 10) {
+                Label("日历权限未开启", systemImage: "exclamationmark.circle")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Button {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                } label: {
+                    Label("去系统设置开启", systemImage: "arrow.up.forward.app")
+                        .font(.subheadline.bold())
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(orbitAccent())
+            }
+        case .notDetermined:
+            Button {
+                Task {
+                    _ = await CalendarService.shared.ensureAccess()
+                    calendarStatus = EKEventStore.authorizationStatus(for: .event)
+                }
+            } label: {
+                Label("允许访问日历", systemImage: "calendar.badge.plus")
+                    .font(.headline)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(orbitAccent())
+        @unknown default:
+            EmptyView()
+        }
     }
 
     private func onboardingHeader(icon: String, title: String, detail: String) -> some View {
         VStack(spacing: 20) {
-            Image(systemName: icon).font(.system(size: 56)).foregroundStyle(orbitAccent())
-            Text(title).font(.largeTitle.bold()).multilineTextAlignment(.center)
-            Text(detail).font(.title3).foregroundStyle(.secondary).multilineTextAlignment(.center)
+            Image(systemName: icon).font(.system(size: 52)).foregroundStyle(orbitAccent())
+            Text(title).font(.title.bold()).multilineTextAlignment(.center)
+            Text(detail).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
         }
     }
 

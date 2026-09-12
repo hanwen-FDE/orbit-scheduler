@@ -30,6 +30,21 @@ final class CalendarService {
         store.calendar(withIdentifier: id)?.title
     }
 
+    /// 手机上全部日历（含只读，供“读取哪些日历”设置展示）。
+    func readableCalendars() -> [EKCalendar] {
+        store.calendars(for: .event)
+    }
+
+    /// 用户勾选的可见日历；nil 或空 = 不限制（全部读取）。
+    private var visibleFilter: [EKCalendar]? {
+        guard let ids = UserDefaults.standard.stringArray(forKey: "orbit.visibleCalendarIds"),
+              !ids.isEmpty else { return nil }
+        let set = Set(ids)
+        let all = store.calendars(for: .event)
+        let picked = all.filter { set.contains($0.calendarIdentifier) }
+        return picked.isEmpty ? nil : picked
+    }
+
     // MARK: - 事件 CRUD
 
     @discardableResult
@@ -105,7 +120,7 @@ final class CalendarService {
         let predicate = store.predicateForEvents(
             withStart: snapshot.start,
             end: snapshot.end,
-            calendars: nil
+            calendars: visibleFilter
         )
         return store.events(matching: predicate)
             .filter { event in
@@ -180,7 +195,7 @@ final class CalendarService {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: visibleFilter)
         return store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
     }
 
@@ -189,7 +204,7 @@ final class CalendarService {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: date)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: visibleFilter)
         return store.events(matching: predicate).sorted { lhs, rhs in
             if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
             return lhs.startDate < rhs.startDate

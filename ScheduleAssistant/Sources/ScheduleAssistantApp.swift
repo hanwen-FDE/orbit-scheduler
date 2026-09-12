@@ -53,11 +53,8 @@ struct OrbitRootView: View {
                 get: { !app.onboardingCompleted },
                 set: { if !$0 { app.onboardingCompleted = true } }
             )) {
-                OnboardingView { demoText in
+                OnboardingView {
                     app.onboardingCompleted = true
-                    if let demoText {
-                        chat.send(text: demoText)
-                    }
                 }
             }
     }

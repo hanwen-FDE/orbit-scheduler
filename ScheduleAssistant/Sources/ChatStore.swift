@@ -47,7 +47,29 @@ final class ChatStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
         messages.append(ChatMessage(role: .user, kind: .text, text: trimmed))
         save()
-        process(text: trimmed, image: nil)
+        if isRevisionRequest(trimmed), let target = latestEditableEventMessage() {
+            processRevision(instruction: trimmed, targetIndex: target.index, snapshot: target.snapshot)
+        } else {
+            process(text: trimmed, image: nil)
+        }
+    }
+
+    /// 短句 + 修正类动词开头 → 接续对话，直接修改上一条日程。
+    private func isRevisionRequest(_ text: String) -> Bool {
+        guard text.count <= 40 else { return false }
+        let prefixes = ["修正", "修改", "改到", "改成", "改", "换成", "调整", "推迟", "提前", "删掉提醒", "加提醒"]
+        return prefixes.contains { text.hasPrefix($0) }
+    }
+
+    private func latestEditableEventMessage() -> (index: Int, snapshot: EventSnapshot)? {
+        for index in messages.indices.reversed() {
+            guard messages[index].kind == .eventCard,
+                  var snap = messages[index].event,
+                  !snap.deleted, snap.eventIdentifier != nil else { continue }
+            snap.conflicts = nil
+            return (index, snap)
+        }
+        return nil
     }
 
     func send(image: UIImage) {
@@ -144,6 +166,92 @@ final class ChatStore: ObservableObject {
             isThinking = false
             save()
         }
+    }
+
+    /// 接续对话：把修正语和原日程交给模型，原地更新同一条日程与卡片。
+    private func processRevision(instruction: String, targetIndex: Int, snapshot original: EventSnapshot) {
+        let settings = LLMSettings.shared
+        let provider = settings.activeProvider
+        let config = settings.config(for: provider)
+        isThinking = true
+        messages.append(ChatMessage(role: .assistant, kind: .text, text: "…"))
+        let thinkingIndex = messages.count - 1
+
+        Task {
+            do {
+                let originalJSON = Self.snapshotJSON(original)
+                let revised = try await provider.reviseEvent(originalJSON: originalJSON,
+                                                             instruction: instruction,
+                                                             config: config)
+                guard var parsed = revised.first else {
+                    messages[thinkingIndex].text = "没听懂要怎么改，试试直接说完整安排，比如“明天下午4点门诊随访”。"
+                    isThinking = false
+                    save()
+                    return
+                }
+                // 保持原身份：同一条日历事件、同一张卡片、提醒规则不变。
+                parsed.title = parsed.title.isEmpty ? original.title : parsed.title
+                var snap = original
+                snap.title = parsed.title
+                snap.emoji = parsed.emoji ?? original.emoji
+                snap.isAllDay = parsed.isAllDay ?? original.isAllDay
+                snap.location = parsed.location ?? original.location
+                snap.notes = parsed.notes ?? original.notes
+                snap.recurrence = parsed.recurrence ?? original.recurrence
+                let newStart = parsed.resolvedStartDate ?? original.start
+                snap.start = newStart
+                if parsed.isAllDay == true {
+                    snap.end = Calendar.current.date(byAdding: .day, value: 1,
+                                                     to: Calendar.current.startOfDay(for: newStart)) ?? newStart
+                } else {
+                    snap.end = parsed.resolvedEndDate ?? original.end
+                }
+                if snap.end <= snap.start { snap.end = snap.start.addingTimeInterval(3600) }
+                refreshConflictMetadata(for: &snap)
+                CalendarService.shared.updateEvent(&snap)
+                messages[targetIndex].event = snap
+                let timePart = snap.isAllDay ? "" : " \(snap.start.shortTime)"
+                messages[thinkingIndex].text = "已按你的要求更新《\(snap.title)》→ \(snap.start.cardDay)\(timePart)。"
+                registerEventNotifications(snap, messageId: messages[targetIndex].id)
+            } catch {
+                messages[thinkingIndex].text = userFacingErrorMessage(for: error)
+            }
+            isThinking = false
+            save()
+        }
+    }
+
+    private static func snapshotJSON(_ snap: EventSnapshot) -> String {
+        let iso = ISO8601DateFormatter()
+        struct Original: Codable {
+            var title: String
+            var emoji: String
+            var startDate: String
+            var endDate: String
+            var location: String?
+            var notes: String?
+            var isAllDay: Bool
+            var recurrence: RecurrenceSpec?
+        }
+        let original = Original(
+            title: snap.title, emoji: snap.emoji,
+            startDate: iso.string(from: snap.start), endDate: iso.string(from: snap.end),
+            location: snap.location, notes: snap.notes,
+            isAllDay: snap.isAllDay, recurrence: snap.recurrence
+        )
+        guard let data = try? JSONEncoder().encode(original),
+              let json = String(data: data, encoding: .utf8) else { return "{}" }
+        return json
+    }
+
+    /// 用户明确选择“忽略”冲突：清掉提示与改期建议，允许两件事并行。
+    func ignoreConflicts(messageId: UUID) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }),
+              var snap = messages[idx].event else { return }
+        snap.conflicts = nil
+        snap.suggestedStart = nil
+        messages[idx].event = snap
+        save()
     }
 
     /// 区分配置、网络、模型返回和日历错误，避免所有失败都被误导为 API Key 问题。
@@ -499,9 +607,6 @@ final class ChatStore: ObservableObject {
         }.count
         if AppSettings.shared.morningBriefingShowsConflicts && conflicts > 0 {
             parts.append("今天有 \(conflicts) 项安排存在时间冲突，请提前确认。")
-        }
-        if AppSettings.shared.morningBriefingShowsEncouragement {
-            parts.append(briefing.encouragement)
         }
         let text = parts.joined(separator: "\n")
         if let index = messages.firstIndex(where: {

@@ -8,14 +8,15 @@ struct SideDrawerView: View {
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var app = AppSettings.shared
-    @State private var briefingReminderStatus = ""
-    @State private var showDeleteConversationConfirmation = false
+    @State private var morningStatus = ""
+    @State private var eveningStatus = ""
 
     var body: some View {
         NavigationStack {
             List {
                 themeSection
                 defaultSettingsSection
+                visibleCalendarsSection
                 briefingSection
                 Section {
                     NavigationLink("使用教程") { UsageGuideView() }
@@ -24,11 +25,6 @@ struct SideDrawerView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             app.onboardingCompleted = false
                         }
-                    }
-                }
-                Section {
-                    Button("删除当前对话", role: .destructive) {
-                        showDeleteConversationConfirmation = true
                     }
                 }
                 Section {
@@ -46,12 +42,6 @@ struct SideDrawerView: View {
             }
         }
         .presentationDetents([.large])
-        .confirmationDialog("删除当前对话？", isPresented: $showDeleteConversationConfirmation, titleVisibility: .visible) {
-            Button("删除对话", role: .destructive) { chat.clearConversation() }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("只删除 Orbit 对话记录，不会删除已经写入 Apple 日历的日程。")
-        }
     }
 
 
@@ -103,18 +93,44 @@ struct SideDrawerView: View {
             }
             DatePicker("通常起床", selection: wakeTime, displayedComponents: .hourAndMinute)
             DatePicker("通常睡觉", selection: sleepTime, displayedComponents: .hourAndMinute)
-            Button("设置每日推送提醒") {
-                Task { briefingReminderStatus = await enableDailyNotifications() }
-            }
-            if !briefingReminderStatus.isEmpty {
-                Text(briefingReminderStatus)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
         } header: {
             Text("默认设置")
         } footer: {
-            Text("作息决定早报（起床后 30 分钟）与晚报（睡前 30 分钟）的推送时间，也用于筛选合理的冲突重排建议。")
+            Text("作息决定早报与晚报的推送时间，也用于筛选合理的冲突重排建议；“读取哪些日历”控制 Orbit 展示与检查冲突的范围。")
+        }
+    }
+
+    /// 读取哪些日历：空选 = 全部。
+    private var visibleCalendarsSection: some View {
+        Section {
+            let calendars = CalendarService.shared.readableCalendars()
+            if calendars.isEmpty {
+                Text("未读取到日历，请检查系统日历账户")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(calendars, id: \.calendarIdentifier) { cal in
+                    Toggle(cal.title, isOn: Binding(
+                        get: {
+                            guard let visible = app.visibleCalendarIds else { return true }
+                            return visible.contains(cal.calendarIdentifier)
+                        },
+                        set: { on in
+                            var ids = Set(app.visibleCalendarIds ?? calendars.map(\.$0.calendarIdentifier))
+                            if on {
+                                ids.insert(cal.calendarIdentifier)
+                            } else {
+                                ids.remove(cal.calendarIdentifier)
+                            }
+                            app.visibleCalendarIds = ids.isEmpty ? nil : Array(ids)
+                        }
+                    ))
+                }
+            }
+        } header: {
+            Text("读取哪些日历")
+        } footer: {
+            Text("关闭的日历不会出现在“今天”列表、简报统计和冲突检查里；全部关闭等同全部开启。")
         }
     }
 
@@ -152,28 +168,39 @@ struct SideDrawerView: View {
 
     private var briefingSection: some View {
         Section {
-            Toggle("晨间早报", isOn: $app.morningBriefingEnabled)
+            Toggle("晨报", isOn: $app.morningBriefingEnabled)
             if app.morningBriefingEnabled {
-                Text("起床后 30 分钟（\(timeText(app.morningBriefingTime))）推送到对话窗口")
+                Text("起床后 \(app.morningBriefingOffsetMinutes) 分钟（\(timeText(app.morningBriefingTime))）推送到对话")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Button("设置晨报推送提醒") {
+                    Task { morningStatus = await enableMorningNotification() }
+                }
+                if !morningStatus.isEmpty {
+                    Text(morningStatus).font(.footnote).foregroundStyle(.secondary)
+                }
             }
-            Toggle("每日晚报", isOn: $app.eveningBriefingEnabled)
+            Toggle("晚报", isOn: $app.eveningBriefingEnabled)
             if app.eveningBriefingEnabled {
-                Text("睡前 30 分钟（\(timeText(app.eveningBriefingTime))）总结今天的任务数")
+                Text("睡前 \(app.eveningBriefingOffsetMinutes) 分钟（\(timeText(app.eveningBriefingTime))）总结今天任务")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                Button("设置晚报推送提醒") {
+                    Task { eveningStatus = await enableEveningNotification() }
+                }
+                if !eveningStatus.isEmpty {
+                    Text(eveningStatus).font(.footnote).foregroundStyle(.secondary)
+                }
             }
             if app.morningBriefingEnabled || app.eveningBriefingEnabled {
-                Toggle("简报显示本地天气", isOn: $app.weatherBriefingEnabled)
+                Toggle("显示本地天气", isOn: $app.weatherBriefingEnabled)
                 Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
-                Toggle("显示鼓励语", isOn: $app.morningBriefingShowsEncouragement)
                 Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
             }
         } header: {
-            Text("简报设置")
+            Text("每日播报")
         } footer: {
-            Text("简报以对话卡片形式出现在对话窗口；推送时间的开关在上方“默认设置”里。")
+            Text("播报以对话卡片形式出现在对话窗口；系统通知只负责到点提醒你打开 Orbit。")
         }
     }
 
@@ -181,14 +208,14 @@ struct SideDrawerView: View {
         String(format: "%02d:%02d", time.hour, time.minute)
     }
 
-    private func enableDailyNotifications() async -> String {
+    private func enableMorningNotification() async -> String {
         let morning = app.morningBriefingTime
+        return await MorningBriefingScheduler.enable(hour: morning.hour, minute: morning.minute)
+    }
+
+    private func enableEveningNotification() async -> String {
         let evening = app.eveningBriefingTime
-        let morningResult = await MorningBriefingScheduler.enable(
-            hour: morning.hour, minute: morning.minute)
-        let eveningResult = await EveningBriefingScheduler.enable(
-            hour: evening.hour, minute: evening.minute)
-        return morningResult + "\n" + eveningResult
+        return await EveningBriefingScheduler.enable(hour: evening.hour, minute: evening.minute)
     }
 
 }

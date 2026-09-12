@@ -12,6 +12,8 @@ protocol LLMProvider {
     var supportsImage: Bool { get }
 
     func parseSchedule(text: String?, image: UIImage?, config: LLMProviderConfig) async throws -> [ParsedEvent]
+    /// 接续对话：根据用户一句修正语修改已有日程，返回修改后的日程。
+    func reviseEvent(originalJSON: String, instruction: String, config: LLMProviderConfig) async throws -> [ParsedEvent]
     func testConnection(config: LLMProviderConfig) async throws -> Bool
 }
 
@@ -149,6 +151,34 @@ class OpenAICompatProvider: LLMProvider {
         let content = try Self.extractContent(data: data, response: response)
         _ = try Self.decodeEvents(from: content)
         return true
+    }
+
+    static let revisionSystemPrompt = """
+    你是日程修改助手。用户会提供一条已有日程（JSON）和一句中文修改要求。
+    请输出修改后的**完整**日程 JSON，格式：{"events": [{...}]}，字段与输入一致：
+    {"title","emoji","startDate"(ISO8601),"endDate","location","notes","isAllDay","recurrence","confidence"}
+    规则：
+    - 只修改用户要求的部分，其余字段保持原值（包括未提及的日期、地点、循环规则）。
+    - 用户说“提前/推迟 X 分钟/小时/天”时按原时间推算新 startDate/endDate。
+    - 若要求与日程内容无关或无法理解，原样输出输入的日程。
+    - 当前系统时间会随消息一并提供。
+    """
+
+    func reviseEvent(originalJSON: String, instruction: String, config: LLMProviderConfig) async throws -> [ParsedEvent] {
+        guard !config.apiKey.isEmpty else { throw LLMError.noAPIKey }
+        let promptContext = "（当前时间：\(Self.nowString())）"
+        let userText = "已有日程：\n\(originalJSON)\n\(promptContext)\n修改要求：\(instruction)"
+        let url = URL(string: effectiveBaseURL(config).trimmingCharacters(in: CharacterSet(charactersIn: "/")) + "/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 120
+        request.httpBody = try buildRequestBody(text: userText, image: nil, config: config,
+                                                systemPrompt: Self.revisionSystemPrompt)
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let jsonString = try Self.extractContent(data: data, response: response)
+        return try Self.decodeEvents(from: jsonString)
     }
 
     // MARK: - 响应解析
