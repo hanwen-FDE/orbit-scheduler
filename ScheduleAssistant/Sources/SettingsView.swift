@@ -70,3 +70,52 @@ struct ProviderConfigView: View {
         }
     }
 }
+
+/// 「左上角头像 → 设置」：AI 识别（API）、联系方式与关于。
+/// 反馈邮箱上线前请替换为真实地址。
+struct AppSettingsScreen: View {
+    @EnvironmentObject private var settings: LLMSettings
+
+    private static let feedbackEmail = "orbit.feedback@outlook.com"
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("识别服务商", selection: $settings.activeProviderId) {
+                    ForEach(settings.providers, id: \.id) { p in
+                        Text(p.name).tag(p.id)
+                    }
+                }
+                if let active = settings.providers.first(where: { $0.id == settings.activeProviderId }) {
+                    ProviderConfigView(provider: active)
+                }
+            } header: {
+                Text("AI 识别（API）")
+            } footer: {
+                Text("选择服务商后只需粘贴 API Key——接口地址和模型已按国内常用服务预设，高级用户可自行修改。Key 保存在本机 Keychain 中。")
+            }
+
+            Section {
+                if let url = URL(string: "mailto:\(Self.feedbackEmail)?subject=Orbit%20反馈") {
+                    Link(destination: url) {
+                        Label("联系我们：\(Self.feedbackEmail)", systemImage: "envelope")
+                    }
+                }
+                HStack {
+                    Label("关于 Orbit", systemImage: "info.circle")
+                    Spacer()
+                    Text("官网建设中")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.secondary)
+            } header: {
+                Text("联系与关于")
+            } footer: {
+                Text("点击邮箱可通过邮件 App 直接发送反馈。")
+            }
+        }
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}

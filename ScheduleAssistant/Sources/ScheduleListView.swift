@@ -67,7 +67,7 @@ struct NotificationBellButton: View {
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(3)
-                            .background(Circle().fill(.orange))
+                            .background(Circle().fill(orbitAccent()))
                             .offset(x: 8, y: -8)
                     }
                 }
@@ -78,6 +78,7 @@ struct NotificationBellButton: View {
 
 struct OrbitNotificationCenterView: View {
     @ObservedObject private var store = OrbitNotificationStore.shared
+    @EnvironmentObject private var chat: ChatStore
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -88,7 +89,14 @@ struct OrbitNotificationCenterView: View {
                 } else {
                     List {
                         ForEach(store.items) { item in
-                            Button { store.markRead(item.id) } label: {
+                            Button {
+                                store.markRead(item.id)
+                                // 有关联日程卡片的通知：关闭通知中心并跳去那张卡片打开编辑。
+                                if let messageId = item.relatedMessageId {
+                                    chat.pendingFocusMessageId = messageId
+                                    dismiss()
+                                }
+                            } label: {
                                 HStack(alignment: .top, spacing: 12) {
                                     Image(systemName: item.kind.icon)
                                         .foregroundStyle(color(for: item.kind))
@@ -96,7 +104,7 @@ struct OrbitNotificationCenterView: View {
                                     VStack(alignment: .leading, spacing: 5) {
                                         HStack {
                                             Text(item.title).font(.headline)
-                                            if !item.isRead { Circle().fill(.orange).frame(width: 7, height: 7) }
+                                            if !item.isRead { Circle().fill(orbitAccent()).frame(width: 7, height: 7) }
                                         }
                                         Text(item.detail).font(.subheadline).foregroundStyle(.secondary).lineLimit(3)
                                         Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
@@ -123,7 +131,7 @@ struct OrbitNotificationCenterView: View {
 
     private func color(for kind: OrbitNotificationKind) -> Color {
         switch kind {
-        case .briefing: return .orange
+        case .briefing: return orbitAccent()
         case .conflict, .writeFailure, .aiFailure: return .red
         case .reminder: return .blue
         }
@@ -162,10 +170,14 @@ struct TodayScheduleView: View {
                 }
                 .padding(.vertical, 12)
             }
-            .navigationTitle("今天")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showDrawer = true } label: { Image(systemName: "person.crop.circle").font(.title3) }
+                    Button { showDrawer = true } label: {
+                        Image(systemName: "person.crop.circle")
+                            .font(.system(size: 22))
+                            .foregroundStyle(.primary)
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     NotificationBellButton(isPresented: $showNotifications)
@@ -179,23 +191,35 @@ struct TodayScheduleView: View {
         .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await refresh() } } }
     }
 
+    /// 页面顶部唯一的标题行：粗体日期 + 小字完整日期在左，前后翻天按钮在右。
     private var daySelector: some View {
-        HStack {
-            Button { selectedDay = Calendar.current.date(byAdding: .day, value: -1, to: selectedDay) ?? selectedDay } label: {
-                Image(systemName: "chevron.left")
-            }
-            Spacer()
-            VStack(spacing: 3) {
-                Text(selectedDay.friendlyDay).font(.headline)
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selectedDay.friendlyDay).font(.title2.bold())
                 Text(selectedDay.formatted(.dateTime.year().month().day().weekday()))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button { selectedDay = Calendar.current.date(byAdding: .day, value: 1, to: selectedDay) ?? selectedDay } label: {
-                Image(systemName: "chevron.right")
+            Button { shiftDay(-1) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.headline)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color(.secondarySystemBackground)))
             }
+            .buttonStyle(.plain)
+            Button { shiftDay(1) } label: {
+                Image(systemName: "chevron.right")
+                    .font(.headline)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color(.secondarySystemBackground)))
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 28)
+        .padding(.horizontal, 18)
+    }
+
+    private func shiftDay(_ delta: Int) {
+        selectedDay = Calendar.current.date(byAdding: .day, value: delta, to: selectedDay) ?? selectedDay
     }
 
     private func timelineRow(_ event: EKEvent) -> some View {

@@ -224,6 +224,33 @@ class ZhipuProvider: OpenAICompatProvider {
     }
 }
 
+/// DeepSeek（OpenAI 兼容，默认 deepseek-chat）
+class DeepSeekProvider: OpenAICompatProvider {
+    init() {
+        super.init(id: "deepseek", name: "DeepSeek",
+                   baseURL: "https://api.deepseek.com/v1",
+                   model: "deepseek-chat", supportsImage: false)
+    }
+}
+
+/// Kimi / 月之暗面（OpenAI 兼容）
+class KimiProvider: OpenAICompatProvider {
+    init() {
+        super.init(id: "kimi", name: "Kimi（月之暗面）",
+                   baseURL: "https://api.moonshot.cn/v1",
+                   model: "kimi-latest", supportsImage: false)
+    }
+}
+
+/// 阿里云百炼 / 通义千问（OpenAI 兼容模式，qwen-vl-plus 支持图片）
+class QwenProvider: OpenAICompatProvider {
+    init() {
+        super.init(id: "qwen", name: "通义千问（百炼）",
+                   baseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                   model: "qwen-vl-plus", supportsImage: true)
+    }
+}
+
 /// OpenAI 官方（gpt-4o 多模态）
 class OpenAIProvider: OpenAICompatProvider {
     init() {
@@ -257,7 +284,10 @@ class CustomCompatProvider: OpenAICompatProvider {
 final class LLMSettings: ObservableObject {
     static let shared = LLMSettings()
 
-    let providers: [LLMProvider] = [ZhipuProvider(), OpenAIProvider(), CustomCompatProvider()]
+    let providers: [LLMProvider] = [
+        ZhipuProvider(), DeepSeekProvider(), KimiProvider(), QwenProvider(),
+        OpenAIProvider(), CustomCompatProvider()
+    ]
 
     private let defaults = UserDefaults.standard
     private let activeKey = "llm.activeProvider"

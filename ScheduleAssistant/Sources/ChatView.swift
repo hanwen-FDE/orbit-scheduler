@@ -58,6 +58,14 @@ struct ChatView: View {
         .onAppear {
             refreshBriefingAndHandleShortcut()
         }
+        .onChange(of: chat.pendingFocusMessageId) { _, messageId in
+            guard let messageId,
+                  let target = chat.messages.first(where: { $0.id == messageId }) else { return }
+            chat.pendingFocusMessageId = nil
+            if target.event != nil || target.habit != nil {
+                editingMessage = target
+            }
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             refreshBriefingAndHandleShortcut()
@@ -145,7 +153,7 @@ struct ChatView: View {
                     if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
                         Button(action: sendText) {
                             Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 30)).foregroundStyle(.orange)
+                                .font(.system(size: 30)).foregroundStyle(orbitAccent())
                         }
                     } else {
                         Button {
@@ -155,7 +163,7 @@ struct ChatView: View {
                             speech.start()
                         } label: {
                             Image(systemName: "mic.circle.fill")
-                                .font(.system(size: 30)).foregroundStyle(.orange)
+                                .font(.system(size: 30)).foregroundStyle(orbitAccent())
                         }
                     }
                 }
@@ -186,7 +194,7 @@ struct ChatView: View {
                         ForEach(0..<28, id: \.self) { index in
                             let phase = timeline.date.timeIntervalSinceReferenceDate * 4 + Double(index)
                             Capsule()
-                                .fill(index < 20 ? Color.orange : Color.secondary.opacity(0.25))
+                                .fill(index < 20 ? orbitAccent() : Color.secondary.opacity(0.25))
                                 .frame(width: 3, height: 5 + abs(sin(phase)) * 18)
                         }
                     }
@@ -208,7 +216,7 @@ struct ChatView: View {
                     Image(systemName: "arrow.up")
                         .font(.title3.bold()).foregroundStyle(.white)
                         .frame(width: 52, height: 52)
-                        .background(Circle().fill(Color.orange))
+                        .background(Circle().fill(orbitAccent()))
                 }
             }
         }
@@ -289,6 +297,7 @@ struct ChatView: View {
                 chat.upsertDailyBriefing(from: briefing)
             }
         }
+        chat.upsertEveningBriefingIfDue(from: briefing)
         handleShortcutRequest()
     }
 

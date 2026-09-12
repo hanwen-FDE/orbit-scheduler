@@ -183,6 +183,44 @@ enum MorningBriefingScheduler {
     }
 }
 
+/// 晚报的每日本地通知（时间 = 睡前 30 分钟，由 AppSettings.eveningBriefingTime 决定）
+enum EveningBriefingScheduler {
+    static let notificationIdentifier = "orbit.evening-briefing"
+
+    static func enable(hour: Int, minute: Int) async -> String {
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(options: [.alert, .sound])
+            guard granted else {
+                return "未获得通知权限，请在系统设置中允许 Orbit 发送通知。"
+            }
+            center.removePendingNotificationRequests(withIdentifiers: [notificationIdentifier])
+            let content = UNMutableNotificationContent()
+            content.title = "晚安，Orbit"
+            content.body = "打开 Orbit，看看今天完成了多少任务。"
+            content.sound = .default
+            var components = DateComponents()
+            components.hour = max(0, min(23, hour))
+            components.minute = max(0, min(59, minute))
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+            try await center.add(UNNotificationRequest(
+                identifier: notificationIdentifier,
+                content: content,
+                trigger: trigger
+            ))
+            return "已设置每天 \(String(format: "%02d:%02d", hour, minute)) 的晚报提醒。"
+        } catch {
+            return "未能设置晚报提醒：\(error.localizedDescription)"
+        }
+    }
+
+    static func disable() {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(
+            withIdentifiers: [notificationIdentifier]
+        )
+    }
+}
+
 struct DailyBriefingCard: View {
     @ObservedObject var store: DailyBriefingStore
     @ObservedObject private var app = AppSettings.shared
@@ -200,7 +238,7 @@ struct DailyBriefingCard: View {
                 Spacer()
                 Image(systemName: store.weatherSymbolName)
                     .font(.title2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(orbitAccent())
             }
 
             if app.weatherBriefingEnabled {

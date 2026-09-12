@@ -7,7 +7,49 @@ enum ChatRole: String, Codable {
 enum MessageKind: String, Codable {
     case text, image, voice, eventCard, briefing
     case habitCard
+    case eveningBriefing
 }
+
+/// 全局主题预设：卡片强调色与 TabView tint 都跟随这里。
+enum OrbitThemePreset: String, CaseIterable, Identifiable {
+    case grayBlue
+    case indigo
+    case forest
+    case rose
+    case teal
+    case amber
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .grayBlue: return "灰 + 蓝"
+        case .indigo: return "石墨 + 靛蓝"
+        case .forest: return "炭灰 + 松绿"
+        case .rose: return "银灰 + 玫红"
+        case .teal: return "暖灰 + 青碧"
+        case .amber: return "冷灰 + 琥珀"
+        }
+    }
+
+    var accent: Color {
+        switch self {
+        case .grayBlue: return .blue
+        case .indigo: return .indigo
+        case .forest: return Color(red: 0.13, green: 0.55, blue: 0.35)
+        case .rose: return Color(red: 0.83, green: 0.25, blue: 0.44)
+        case .teal: return Color(red: 0.10, green: 0.55, blue: 0.55)
+        case .amber: return Color(red: 0.85, green: 0.55, blue: 0.10)
+        }
+    }
+
+    /// 浅色底：简报卡片、图标圆底等
+    var softFill: Color { accent.opacity(0.12) }
+}
+
+/// 视图里替代硬编码强调色的入口，随用户选择的主题实时变化。
+@MainActor
+var orbitAccent: Color { AppSettings.shared.theme.accent }
 
 /// 单条聊天消息
 struct ChatMessage: Identifiable, Codable, Equatable {
@@ -197,7 +239,11 @@ final class AppSettings: ObservableObject {
     private let kBriefingEncouragement = "orbit.morningBriefingEncouragement"
     private let kBriefingWeekends = "orbit.morningBriefingWeekends"
     private let kWakeHour = "orbit.wakeHour"
+    private let kWakeMinute = "orbit.wakeMinute"
     private let kSleepHour = "orbit.sleepHour"
+    private let kSleepMinute = "orbit.sleepMinute"
+    private let kEveningBriefing = "orbit.eveningBriefingEnabled"
+    private let kTheme = "orbit.theme"
     private let kOnboarding = "orbit.onboardingCompleted"
 
     @Published var defaultCalendarId: String? {
@@ -233,11 +279,35 @@ final class AppSettings: ObservableObject {
     @Published var wakeHour: Int {
         didSet { UserDefaults.standard.set(wakeHour, forKey: kWakeHour) }
     }
+    @Published var wakeMinute: Int {
+        didSet { UserDefaults.standard.set(wakeMinute, forKey: kWakeMinute) }
+    }
     @Published var sleepHour: Int {
         didSet { UserDefaults.standard.set(sleepHour, forKey: kSleepHour) }
     }
+    @Published var sleepMinute: Int {
+        didSet { UserDefaults.standard.set(sleepMinute, forKey: kSleepMinute) }
+    }
+    @Published var eveningBriefingEnabled: Bool {
+        didSet { UserDefaults.standard.set(eveningBriefingEnabled, forKey: kEveningBriefing) }
+    }
+    @Published var theme: OrbitThemePreset {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: kTheme) }
+    }
     @Published var onboardingCompleted: Bool {
         didSet { UserDefaults.standard.set(onboardingCompleted, forKey: kOnboarding) }
+    }
+
+    /// 晨间简报时间 = 起床后 30 分钟；晚报时间 = 睡觉前 30 分钟。
+    var morningBriefingTime: (hour: Int, minute: Int) {
+        let total = wakeHour * 60 + wakeMinute + 30
+        return (total / 60 % 24, total % 60)
+    }
+
+    var eveningBriefingTime: (hour: Int, minute: Int) {
+        let total = sleepHour * 60 + sleepMinute - 30
+        let clamped = total < 0 ? total + 24 * 60 : total
+        return (clamped / 60 % 24, clamped % 60)
     }
 
     init() {
@@ -253,7 +323,11 @@ final class AppSettings: ObservableObject {
         morningBriefingShowsEncouragement = UserDefaults.standard.object(forKey: kBriefingEncouragement) as? Bool ?? true
         morningBriefingOnWeekends = UserDefaults.standard.object(forKey: kBriefingWeekends) as? Bool ?? true
         wakeHour = UserDefaults.standard.object(forKey: kWakeHour) as? Int ?? 7
+        wakeMinute = UserDefaults.standard.object(forKey: kWakeMinute) as? Int ?? 0
         sleepHour = UserDefaults.standard.object(forKey: kSleepHour) as? Int ?? 23
+        sleepMinute = UserDefaults.standard.object(forKey: kSleepMinute) as? Int ?? 0
+        eveningBriefingEnabled = UserDefaults.standard.object(forKey: kEveningBriefing) as? Bool ?? true
+        theme = OrbitThemePreset(rawValue: UserDefaults.standard.string(forKey: kTheme) ?? "") ?? .grayBlue
         onboardingCompleted = UserDefaults.standard.bool(forKey: kOnboarding)
     }
 }

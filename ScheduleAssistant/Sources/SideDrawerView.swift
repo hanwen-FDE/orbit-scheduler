@@ -8,17 +8,16 @@ struct SideDrawerView: View {
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var app = AppSettings.shared
-    @State private var morningReminderStatus = ""
+    @State private var briefingReminderStatus = ""
     @State private var showDeleteConversationConfirmation = false
 
     var body: some View {
         NavigationStack {
             List {
-                iconSection
-                apiSection
+                themeSection
                 calendarSection
                 schedulePreferenceSection
-                morningBriefingSection
+                briefingSection
                 shortcutSection
                 Section {
                     NavigationLink("使用教程") { UsageGuideView() }
@@ -32,6 +31,13 @@ struct SideDrawerView: View {
                 Section {
                     Button("删除当前对话", role: .destructive) {
                         showDeleteConversationConfirmation = true
+                    }
+                }
+                Section {
+                    NavigationLink {
+                        AppSettingsScreen()
+                    } label: {
+                        Label("设置", systemImage: "gearshape")
                     }
                 }
             }
@@ -52,64 +58,82 @@ struct SideDrawerView: View {
 
     private var schedulePreferenceSection: some View {
         Section {
-            Stepper("通常 \(app.wakeHour):00 起床", value: $app.wakeHour, in: 4...12)
-            Stepper("通常 \(app.sleepHour):00 睡觉", value: $app.sleepHour, in: 19...24)
+            DatePicker("通常起床", selection: wakeTime, displayedComponents: .hourAndMinute)
+            DatePicker("通常睡觉", selection: sleepTime, displayedComponents: .hourAndMinute)
         } header: {
-            Text("智能排程边界")
+            Text("作息时间")
         } footer: {
-            Text("只用于筛选合理的冲突重排建议，不会自动创建“习惯”或作息日程。")
+            Text("作息决定早报（起床后 30 分钟）与晚报（睡前 30 分钟）的推送时间，也用于筛选合理的冲突重排建议；不会自动创建“习惯”或作息日程。")
         }
     }
 
-    // MARK: - 图标
+    private var wakeTime: Binding<Date> {
+        Binding(
+            get: {
+                var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+                components.hour = app.wakeHour
+                components.minute = app.wakeMinute
+                return Calendar.current.date(from: components) ?? Date()
+            },
+            set: { date in
+                app.wakeHour = Calendar.current.component(.hour, from: date)
+                app.wakeMinute = Calendar.current.component(.minute, from: date)
+            }
+        )
+    }
 
-    private var iconSection: some View {
-        Section("App 图标") {
-            let icons = IconService.allIcons
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 16) {
-                ForEach(icons, id: \.name) { icon in
+    private var sleepTime: Binding<Date> {
+        Binding(
+            get: {
+                var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+                components.hour = app.sleepHour
+                components.minute = app.sleepMinute
+                return Calendar.current.date(from: components) ?? Date()
+            },
+            set: { date in
+                app.sleepHour = Calendar.current.component(.hour, from: date)
+                app.sleepMinute = Calendar.current.component(.minute, from: date)
+            }
+        )
+    }
+
+    // MARK: - 主题色
+
+    private var themeSection: some View {
+        Section {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 14) {
+                ForEach(OrbitThemePreset.allCases) { preset in
                     Button {
-                        IconService.apply(icon.name)
-                        app.alternateIcon = icon.name
+                        app.theme = preset
                     } label: {
                         VStack(spacing: 6) {
-                            IconService.previewImage(named: icon.name)
-                                .resizable()
-                                .frame(width: 58, height: 58)
-                                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                            Text(icon.title)
+                            Circle()
+                                .fill(preset.accent)
+                                .frame(width: 40, height: 40)
+                                .overlay {
+                                    Circle().stroke(Color.gray.opacity(0.6), lineWidth: 1)
+                                }
+                                .overlay(alignment: .bottomTrailing) {
+                                    if app.theme == preset {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.white, .green)
+                                            .font(.caption)
+                                            .offset(x: 5, y: 5)
+                                    }
+                                }
+                            Text(preset.name)
                                 .font(.caption2)
                                 .foregroundStyle(.primary)
-                            if app.alternateIcon == icon.name {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
-                                    .font(.caption)
-                            }
                         }
                     }
                     .buttonStyle(.plain)
                 }
             }
             .padding(.vertical, 8)
-        }
-    }
-
-    // MARK: - API
-
-    private var apiSection: some View {
-        Section {
-            Picker("识别服务商", selection: $settings.activeProviderId) {
-                ForEach(settings.providers, id: \.id) { p in
-                    Text(p.name).tag(p.id)
-                }
-            }
-            if let active = settings.providers.first(where: { $0.id == settings.activeProviderId }) {
-                ProviderConfigView(provider: active)
-            }
         } header: {
-            Text("AI 识别（API）")
+            Text("主题配色")
         } footer: {
-            Text("智谱 API Key 在 open.bigmodel.cn 申请。")
+            Text("App 内的按钮、卡片强调色会跟随所选配色。")
         }
     }
 
@@ -131,46 +155,55 @@ struct SideDrawerView: View {
         }
     }
 
-    // MARK: - 晨间简报
+    // MARK: - 每日简报
 
-    private var morningBriefingSection: some View {
+    private var briefingSection: some View {
         Section {
-            Toggle("打开 App 时显示简报", isOn: Binding(
-                get: { app.morningBriefingEnabled },
-                set: { enabled in
-                    app.morningBriefingEnabled = enabled
-                    if !enabled { MorningBriefingScheduler.disable() }
-                }
-            ))
+            Toggle("晨间早报", isOn: $app.morningBriefingEnabled)
             if app.morningBriefingEnabled {
+                Text("起床后 30 分钟（\(timeText(app.morningBriefingTime))）推送到对话窗口")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            Toggle("每日晚报", isOn: $app.eveningBriefingEnabled)
+            if app.eveningBriefingEnabled {
+                Text("睡前 30 分钟（\(timeText(app.eveningBriefingTime))）总结今天的任务数")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+            if app.morningBriefingEnabled || app.eveningBriefingEnabled {
                 Toggle("简报显示本地天气", isOn: $app.weatherBriefingEnabled)
                 Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
                 Toggle("显示鼓励语", isOn: $app.morningBriefingShowsEncouragement)
                 Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
-                DatePicker("每日提醒时间", selection: morningTime, displayedComponents: .hourAndMinute)
-                Button("设置每天晨间提醒") {
-                    Task {
-                        morningReminderStatus = await MorningBriefingScheduler.enable(
-                            hour: app.morningBriefingHour,
-                            minute: app.morningBriefingMinute
-                        )
-                    }
+                Button("设置每日推送提醒") {
+                    Task { briefingReminderStatus = await enableDailyNotifications() }
                 }
-                Button("关闭每天晨间提醒", role: .destructive) {
-                    MorningBriefingScheduler.disable()
-                    morningReminderStatus = "已关闭每天晨间提醒。"
-                }
-                if !morningReminderStatus.isEmpty {
-                    Text(morningReminderStatus)
+                if !briefingReminderStatus.isEmpty {
+                    Text(briefingReminderStatus)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             }
         } header: {
-            Text("晨间简报")
+            Text("每日简报")
         } footer: {
-            Text("通知只会提醒你打开 Orbit；打开后才会读取最新的日程和你主动允许的本地天气。WeatherKit 需要正式开发者账号启用，侧载期天气不可用时日程简报仍会正常显示。")
+            Text("简报以对话卡片形式出现在对话窗口；系统通知只负责提醒你打开 Orbit。")
         }
+    }
+
+    private func timeText(_ time: (hour: Int, minute: Int)) -> String {
+        String(format: "%02d:%02d", time.hour, time.minute)
+    }
+
+    private func enableDailyNotifications() async -> String {
+        let morning = app.morningBriefingTime
+        let evening = app.eveningBriefingTime
+        let morningResult = await MorningBriefingScheduler.enable(
+            hour: morning.hour, minute: morning.minute)
+        let eveningResult = await EveningBriefingScheduler.enable(
+            hour: evening.hour, minute: evening.minute)
+        return morningResult + "\n" + eveningResult
     }
 
     // MARK: - 系统快捷入口
@@ -192,19 +225,5 @@ struct SideDrawerView: View {
         }
     }
 
-    private var morningTime: Binding<Date> {
-        Binding(
-            get: {
-                var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
-                components.hour = app.morningBriefingHour
-                components.minute = app.morningBriefingMinute
-                return Calendar.current.date(from: components) ?? Date()
-            },
-            set: { date in
-                app.morningBriefingHour = Calendar.current.component(.hour, from: date)
-                app.morningBriefingMinute = Calendar.current.component(.minute, from: date)
-            }
-        )
-    }
 }
 

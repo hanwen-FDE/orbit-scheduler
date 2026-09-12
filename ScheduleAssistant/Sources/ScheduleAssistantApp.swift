@@ -28,6 +28,7 @@ struct ScheduleAssistantApp: App {
 }
 
 struct OrbitRootView: View {
+    @EnvironmentObject private var chat: ChatStore
     @ObservedObject private var app = AppSettings.shared
     @State private var selection = 0
 
@@ -40,14 +41,21 @@ struct OrbitRootView: View {
                 .tabItem { Label("对话", systemImage: "message.fill") }
                 .tag(1)
         }
-        .tint(.orange)
+        .tint(orbitAccent())
+        .onChange(of: chat.pendingFocusMessageId) { _, newValue in
+            // 从“今天”页的通知中心也能一键跳到对话里的日程卡片。
+            if newValue != nil { selection = 1 }
+        }
         .fullScreenCover(isPresented: Binding(
             get: { !app.onboardingCompleted },
             set: { if !$0 { app.onboardingCompleted = true } }
         )) {
-            OnboardingView {
+            OnboardingView { demoText in
                 app.onboardingCompleted = true
                 selection = 1
+                if let demoText {
+                    chat.send(text: demoText)
+                }
             }
         }
     }

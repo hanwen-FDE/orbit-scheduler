@@ -8,6 +8,8 @@ final class ChatStore: ObservableObject {
     @Published var messages: [ChatMessage] = []
     @Published var isThinking = false
     @Published var calendarAccessDenied = false
+    /// 通知中心点击后要求聚焦（并打开编辑）的消息；由 ChatView 消费。
+    @Published var pendingFocusMessageId: UUID?
 
     private let fileURL: URL
 
@@ -98,6 +100,10 @@ final class ChatStore: ObservableObject {
                 for parsed in events {
                     snapshots.append(try await prepare(parsed: parsed))
                 }
+                // 说清楚就直接写入日历；只有写入失败时才降级为待确认卡片。
+                for index in snapshots.indices {
+                    autoAddIfNeeded(&snapshots[index])
+                }
                 // 回复文案：单项详细说，多项汇总说
                 if snapshots.count == 1 {
                     let snap = snapshots[0]
@@ -106,15 +112,25 @@ final class ChatStore: ObservableObject {
                     let recurrencePart = snap.recurrence.map { "，\($0.displayText)循环" } ?? ""
                     let conflictPart = (snap.conflicts?.isEmpty == false)
                         ? "\n发现时间冲突，卡片里有可选的新时间建议。" : ""
-                    messages[thinkingIndex].text = "已识别《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(recurrencePart)\(reminderPart)。请核对卡片后确认添加。\(conflictPart)"
+                    let addedPart = snap.eventIdentifier != nil
+                        ? "已写入「\(snap.calendarTitle)」，点卡片可随时修改。"
+                        : "写入日历失败，请核对卡片后手动确认添加。"
+                    messages[thinkingIndex].text = "《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(recurrencePart)\(reminderPart)\(conflictPart)\n\(addedPart)"
                 } else {
                     let earliest = snapshots.min { $0.start < $1.start }!
                     let conflictCount = snapshots.reduce(0) { $0 + ($1.conflicts?.count ?? 0) }
                     let conflictPart = conflictCount > 0 ? "，其中发现 \(conflictCount) 个时间冲突，可在卡片中查看建议" : ""
-                    messages[thinkingIndex].text = "已识别 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)。请逐项核对并确认添加\(conflictPart)"
+                    let failedCount = snapshots.filter { $0.eventIdentifier == nil }.count
+                    let addedPart = failedCount == 0
+                        ? "均已写入日历，点卡片可随时修改。"
+                        : "其中 \(failedCount) 项写入失败，需在卡片中手动确认。"
+                    messages[thinkingIndex].text = "已安排 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)\(conflictPart)。\(addedPart)"
                 }
                 for snap in snapshots {
                     messages.append(ChatMessage(role: .assistant, kind: .eventCard, event: snap))
+                    if snap.eventIdentifier != nil {
+                        registerEventNotifications(snap, messageId: messages[messages.count - 1].id)
+                    }
                 }
             } catch {
                 messages[thinkingIndex].text = userFacingErrorMessage(for: error)
@@ -138,7 +154,7 @@ final class ChatStore: ObservableObject {
         if let llmError = error as? LLMError {
             switch llmError {
             case .noAPIKey:
-                guidance = "请在左上角的 AI 识别（API）中填写当前服务商的 API Key。"
+                guidance = "请点左上角头像 → 设置 → AI 识别，填写当前服务商的 API Key。"
             case .http(let code, _):
                 switch code {
                 case 401, 403:
@@ -223,6 +239,13 @@ final class ChatStore: ObservableObject {
 
     // MARK: - 卡片操作
 
+    /// 识别后立即尝试写入日历；失败时保持待确认状态，由用户在卡片上手动确认。
+    private func autoAddIfNeeded(_ snapshot: inout EventSnapshot) {
+        guard snapshot.eventIdentifier == nil, !snapshot.deleted else { return }
+        guard let identifier = CalendarService.shared.createEvent(snapshot) else { return }
+        snapshot.eventIdentifier = identifier
+    }
+
     func confirmEvent(messageId: UUID) {
         guard let index = messages.firstIndex(where: { $0.id == messageId }),
               var snapshot = messages[index].event,
@@ -236,6 +259,12 @@ final class ChatStore: ObservableObject {
         }
         snapshot.eventIdentifier = identifier
         messages[index].event = snapshot
+        registerEventNotifications(snapshot, messageId: messageId)
+        save()
+    }
+
+    /// 写入成功后的通知登记（自动添加和手动确认共用）。
+    private func registerEventNotifications(_ snapshot: EventSnapshot, messageId: UUID) {
         OrbitNotificationStore.shared.add(
             kind: .reminder,
             title: snapshot.title,
@@ -250,8 +279,6 @@ final class ChatStore: ObservableObject {
                 relatedMessageId: messageId
             )
         }
-        appendSystemMessage("已添加《\(snapshot.title)》到「\(snapshot.calendarTitle)」。")
-        save()
     }
 
     func updateMessage(_ messageId: UUID, event: EventSnapshot) {
@@ -416,6 +443,39 @@ final class ChatStore: ObservableObject {
         }
         let key = date.formatted(.iso8601.year().month().day())
         OrbitNotificationStore.shared.add(kind: .briefing, title: "今日简报", detail: "\(key) · \(text)", dailyKey: key)
+        save()
+    }
+
+    /// 每日晚报：过了“睡前半小时”且今天还没生成过时，以对话卡片形式插入。
+    func upsertEveningBriefingIfDue(from briefing: DailyBriefingStore) {
+        guard AppSettings.shared.eveningBriefingEnabled else { return }
+        let calendar = Calendar.current
+        let now = Date()
+        let due = calendar.date(bySettingHour: AppSettings.shared.eveningBriefingTime.hour,
+                                 minute: AppSettings.shared.eveningBriefingTime.minute,
+                                 second: 0, of: now) ?? now
+        guard now >= due else { return }
+        if messages.contains(where: { $0.kind == .eveningBriefing && calendar.isDate($0.createdAt, inSameDayAs: now) }) {
+            return
+        }
+        let events = briefing.todayEvents
+        let taskPart: String
+        switch events.count {
+        case 0: taskPart = "今天没有安排任何任务，今晚可以安心休息。"
+        case 1: taskPart = "今天共有 1 项任务，别忘了回顾完成情况。"
+        default:
+            let remaining = events.filter { $0.end > now }.count
+            taskPart = remaining > 0
+                ? "今天共有 \(events.count) 项任务，还剩 \(remaining) 项在进行或未开始。"
+                : "今天共有 \(events.count) 项任务，已全部结束。"
+        }
+        let summary = events.count >= 5
+            ? "今天节奏不慢，睡前的放松也是日程的一部分。"
+            : "把今天放一放，明天的事明天再轨道上见。"
+        let text = "\(taskPart)\n\(summary)"
+        messages.append(ChatMessage(role: .assistant, kind: .eveningBriefing, text: text, createdAt: now))
+        let key = now.formatted(.iso8601.year().month().day())
+        OrbitNotificationStore.shared.add(kind: .briefing, title: "今日晚报", detail: text, dailyKey: key + "-evening")
         save()
     }
 
