@@ -18,7 +18,6 @@ struct SideDrawerView: View {
                 calendarSection
                 schedulePreferenceSection
                 briefingSection
-                shortcutSection
                 Section {
                     NavigationLink("使用教程") { UsageGuideView() }
                     Button("重新观看首次教学") {
@@ -101,39 +100,29 @@ struct SideDrawerView: View {
 
     private var themeSection: some View {
         Section {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 3), spacing: 14) {
+            HStack(spacing: 18) {
                 ForEach(OrbitThemePreset.allCases) { preset in
                     Button {
                         app.theme = preset
                     } label: {
-                        VStack(spacing: 6) {
-                            Circle()
-                                .fill(preset.accent)
-                                .frame(width: 40, height: 40)
-                                .overlay {
-                                    Circle().stroke(Color.gray.opacity(0.6), lineWidth: 1)
+                        Circle()
+                            .fill(preset.accent)
+                            .frame(width: 30, height: 30)
+                            .overlay {
+                                if app.theme == preset {
+                                    Image(systemName: "checkmark")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
                                 }
-                                .overlay(alignment: .bottomTrailing) {
-                                    if app.theme == preset {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundStyle(.white, .green)
-                                            .font(.caption)
-                                            .offset(x: 5, y: 5)
-                                    }
-                                }
-                            Text(preset.name)
-                                .font(.caption2)
-                                .foregroundStyle(.primary)
-                        }
+                            }
                     }
                     .buttonStyle(.plain)
                 }
+                Spacer(minLength: 0)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
         } header: {
             Text("主题配色")
-        } footer: {
-            Text("App 内的按钮、卡片强调色会跟随所选配色。")
         }
     }
 
@@ -206,24 +195,17 @@ struct SideDrawerView: View {
         return morningResult + "\n" + eveningResult
     }
 
-    // MARK: - 系统快捷入口
-
-    private var shortcutSection: some View {
-        Section("小组件与快捷指令") {
-            Label("添加 Orbit 小组件", systemImage: "rectangle.on.rectangle")
-            Text("在主屏幕长按 → 编辑 → 添加小组件 → 选择 Orbit，即可一键进入快速记录。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            if let shortcutsURL = URL(string: "shortcuts://") {
-                Link(destination: shortcutsURL) {
-                    Label("打开“快捷指令”App", systemImage: "square.and.arrow.up")
-                }
-            }
-            Text("可添加“快速记录日程”和“查看今日日程”；系统也会将它们用于 Siri 和 Spotlight。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
+    private func timeText(_ time: (hour: Int, minute: Int)) -> String {
+        String(format: "%02d:%02d", time.hour, time.minute)
     }
 
+    private func enableDailyNotifications() async -> String {
+        let morning = app.morningBriefingTime
+        let evening = app.eveningBriefingTime
+        let morningResult = await MorningBriefingScheduler.enable(
+            hour: morning.hour, minute: morning.minute)
+        let eveningResult = await EveningBriefingScheduler.enable(
+            hour: evening.hour, minute: evening.minute)
+        return morningResult + "\n" + eveningResult
+    }
 }
-

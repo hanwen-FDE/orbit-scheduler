@@ -11,41 +11,27 @@ enum MessageKind: String, Codable {
     case eveningBriefing
 }
 
-/// 全局主题预设：卡片强调色与 TabView tint 都跟随这里。
+/// 全局主题预设（参考截图色板）：一行 6 个纯色圆点，默认蓝。
 enum OrbitThemePreset: String, CaseIterable, Identifiable {
-    case grayBlue
-    case indigo
-    case forest
-    case rose
-    case teal
-    case amber
+    case blue
+    case red
+    case green
+    case yellow
+    case purple
+    case skyBlue
 
     var id: String { rawValue }
 
-    var name: String {
-        switch self {
-        case .grayBlue: return "灰 + 蓝"
-        case .indigo: return "石墨 + 靛蓝"
-        case .forest: return "炭灰 + 松绿"
-        case .rose: return "银灰 + 玫红"
-        case .teal: return "暖灰 + 青碧"
-        case .amber: return "冷灰 + 琥珀"
-        }
-    }
-
     var accent: Color {
         switch self {
-        case .grayBlue: return .blue
-        case .indigo: return .indigo
-        case .forest: return Color(red: 0.13, green: 0.55, blue: 0.35)
-        case .rose: return Color(red: 0.83, green: 0.25, blue: 0.44)
-        case .teal: return Color(red: 0.10, green: 0.55, blue: 0.55)
-        case .amber: return Color(red: 0.85, green: 0.55, blue: 0.10)
+        case .blue: return Color(red: 0.24, green: 0.43, blue: 0.96)   // #3D6DF5
+        case .red: return Color(red: 0.90, green: 0.28, blue: 0.30)    // #E5484D
+        case .green: return Color(red: 0.24, green: 0.73, blue: 0.38)  // #3DBB61
+        case .yellow: return Color(red: 0.96, green: 0.77, blue: 0.24) // #F5C53D
+        case .purple: return Color(red: 0.36, green: 0.31, blue: 0.83) // #5B4FD4
+        case .skyBlue: return Color(red: 0.42, green: 0.72, blue: 0.91) // #6BB8E8
         }
     }
-
-    /// 浅色底：简报卡片、图标圆底等
-    var softFill: Color { accent.opacity(0.12) }
 }
 
 /// 视图里替代硬编码强调色的入口，随用户选择的主题实时变化。
@@ -328,7 +314,7 @@ final class AppSettings: ObservableObject {
         sleepHour = UserDefaults.standard.object(forKey: kSleepHour) as? Int ?? 23
         sleepMinute = UserDefaults.standard.object(forKey: kSleepMinute) as? Int ?? 0
         eveningBriefingEnabled = UserDefaults.standard.object(forKey: kEveningBriefing) as? Bool ?? true
-        theme = OrbitThemePreset(rawValue: UserDefaults.standard.string(forKey: kTheme) ?? "") ?? .grayBlue
+        theme = OrbitThemePreset(rawValue: UserDefaults.standard.string(forKey: kTheme) ?? "") ?? .blue
         onboardingCompleted = UserDefaults.standard.bool(forKey: kOnboarding)
     }
 }

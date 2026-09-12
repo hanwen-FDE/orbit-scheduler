@@ -76,8 +76,6 @@ struct ProviderConfigView: View {
 struct AppSettingsScreen: View {
     @EnvironmentObject private var settings: LLMSettings
 
-    private static let feedbackEmail = "orbit.feedback@outlook.com"
-
     var body: some View {
         Form {
             Section {
@@ -96,10 +94,29 @@ struct AppSettingsScreen: View {
             }
 
             Section {
-                if let url = URL(string: "mailto:\(Self.feedbackEmail)?subject=Orbit%20反馈") {
-                    Link(destination: url) {
-                        Label("联系我们：\(Self.feedbackEmail)", systemImage: "envelope")
+                Label("添加 Orbit 小组件", systemImage: "rectangle.on.rectangle")
+                Text("在主屏幕长按 → 编辑 → 添加小组件 → 选择 Orbit，即可一键进入快速记录。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                if let shortcutsURL = URL(string: "shortcuts://") {
+                    Link(destination: shortcutsURL) {
+                        Label("打开“快捷指令”App", systemImage: "square.and.arrow.up")
                     }
+                }
+                Text("可添加“快速记录日程”和“查看今日日程”；系统也会将它们用于 Siri 和 Spotlight。")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("小组件与快捷指令")
+            }
+
+            Section {
+                HStack {
+                    Label("联系我们", systemImage: "envelope")
+                    Spacer()
+                    Text("稍后上线")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
                 HStack {
                     Label("关于 Orbit", systemImage: "info.circle")
@@ -108,11 +125,8 @@ struct AppSettingsScreen: View {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(.secondary)
             } header: {
                 Text("联系与关于")
-            } footer: {
-                Text("点击邮箱可通过邮件 App 直接发送反馈。")
             }
         }
         .navigationTitle("设置")

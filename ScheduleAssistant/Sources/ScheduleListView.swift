@@ -141,6 +141,9 @@ struct OrbitNotificationCenterView: View {
 /// 两个主页面之一：直接读取 Apple 日历中的当天安排。
 struct TodayScheduleView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dismiss) private var dismiss
+    /// 全屏嵌入（从对话页右上角日历图标进入）时，左上角显示“关闭”而不是头像。
+    var embeddedMode: Bool = false
     @State private var selectedDay = Date()
     @State private var events: [EKEvent] = []
     @State private var showNotifications = false
@@ -173,10 +176,14 @@ struct TodayScheduleView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showDrawer = true } label: {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 22))
-                            .foregroundStyle(.primary)
+                    if embeddedMode {
+                        Button("关闭") { dismiss() }
+                    } else {
+                        Button { showDrawer = true } label: {
+                            Image(systemName: "person.crop.circle")
+                                .font(.system(size: 22))
+                                .foregroundStyle(.primary)
+                        }
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {

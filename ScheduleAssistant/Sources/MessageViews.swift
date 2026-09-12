@@ -124,9 +124,7 @@ struct EventCardView: View {
                 Button(action: onTap) {
                     HStack(alignment: .center, spacing: 10) {
                         Text(snapshot.emoji)
-                            .font(.system(size: 26))
-                            .frame(width: 40, height: 40)
-                            .background(Circle().fill(Color(.secondarySystemBackground)))
+                            .font(.title3)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(snapshot.title)
                                 .font(.headline)
@@ -198,17 +196,16 @@ struct EventCardView: View {
                 }
             }
 
-            // 第 2 行：日期 + 时间范围（点击编辑）
+            // 第 2 行：左“日期 周几”、右“起–止”（24 小时制），整行主题色
             Button(action: onTap) {
-                HStack(spacing: 6) {
-                    Image(systemName: "clock")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Text(snapshot.start.friendlyDay)
+                        .font(.subheadline.weight(.medium))
+                    Spacer(minLength: 0)
                     Text(timeRangeText)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.primary)
-                    Spacer(minLength: 0)
                 }
+                .foregroundStyle(orbitAccent())
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -310,10 +307,10 @@ struct EventCardView: View {
         }
     }
 
+    /// 第 2 行右侧的时间段；日期在左侧单独显示。
     private var timeRangeText: String {
-        let dateText = snapshot.start.friendlyDay
-        if snapshot.isAllDay { return "\(dateText) · 全天" }
-        return "\(dateText) \(snapshot.start.shortTime)–\(snapshot.end.shortTime)"
+        if snapshot.isAllDay { return "全天" }
+        return "\(snapshot.start.shortTime)–\(snapshot.end.shortTime)"
     }
 
     /// 简短提醒时长：“15分钟”/“1小时”/“1天”/“准时”

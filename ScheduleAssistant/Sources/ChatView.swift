@@ -9,7 +9,7 @@ struct ChatView: View {
     @StateObject private var speech = SpeechService()
     @StateObject private var briefing = DailyBriefingStore()
     @ObservedObject private var app = AppSettings.shared
-    @Binding var selectedTab: Int
+    @State private var showToday = false
 
     @State private var inputText = ""
     @State private var showPlusPanel = false
@@ -42,11 +42,20 @@ struct ChatView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    NotificationBellButton(isPresented: $showNotifications)
+                    HStack(spacing: 14) {
+                        Button { showToday = true } label: {
+                            Image(systemName: "calendar.day.timeline.left")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundStyle(.primary)
+                        }
+                        .accessibilityLabel("查看今天日程")
+                        NotificationBellButton(isPresented: $showNotifications)
+                    }
                 }
             }
         }
         .sheet(isPresented: $showDrawer) { SideDrawerView() }
+        .fullScreenCover(isPresented: $showToday) { TodayScheduleView(embeddedMode: true) }
         .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
         .sheet(isPresented: $showPlusPanel) { plusPanel }
         .sheet(isPresented: $showCamera) { CameraPicker { sendImage($0) } }
@@ -307,7 +316,7 @@ struct ChatView: View {
         case .compose:
             DispatchQueue.main.async { inputFocused = true }
         case .today:
-            selectedTab = 0
+            showToday = true
         }
     }
 }
