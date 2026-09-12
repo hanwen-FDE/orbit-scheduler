@@ -62,26 +62,24 @@ struct OpenOrbitTodayIntent: AppIntent {
 /// 系统会将这里声明的入口显示在快捷指令、Siri 和 Spotlight 中。
 struct OrbitShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
-        [
-            AppShortcut(
-                intent: OpenOrbitComposerIntent(),
-                phrases: [
-                    "用 \(.applicationName) 添加日程",
-                    "在 \(.applicationName) 快速记录"
-                ],
-                shortTitle: "快速记录",
-                systemImageName: "plus.circle.fill"
-            ),
-            AppShortcut(
-                intent: OpenOrbitTodayIntent(),
-                phrases: [
-                    "查看 \(.applicationName) 的今天",
-                    "打开 \(.applicationName) 日程"
-                ],
-                shortTitle: "今日日程",
-                systemImageName: "calendar"
-            )
-        ]
+        AppShortcut(
+            intent: OpenOrbitComposerIntent(),
+            phrases: [
+                "用 \(.applicationName) 添加日程",
+                "在 \(.applicationName) 快速记录"
+            ],
+            shortTitle: "快速记录",
+            systemImageName: "plus.circle.fill"
+        )
+        AppShortcut(
+            intent: OpenOrbitTodayIntent(),
+            phrases: [
+                "查看 \(.applicationName) 的今天",
+                "打开 \(.applicationName) 日程"
+            ],
+            shortTitle: "今日日程",
+            systemImageName: "calendar"
+        )
     }
 }
 
