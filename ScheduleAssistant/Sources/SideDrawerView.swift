@@ -104,7 +104,7 @@ struct SideDrawerView: View {
     // MARK: - 晨间简报
 
     private var morningBriefingSection: some View {
-        Section("晨间简报") {
+        Section {
             Toggle("打开 App 时显示简报", isOn: Binding(
                 get: { app.morningBriefingEnabled },
                 set: { enabled in
@@ -133,6 +133,8 @@ struct SideDrawerView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+        } header: {
+            Text("晨间简报")
         } footer: {
             Text("通知只会提醒你打开 Orbit；打开后才会读取最新的日程和你主动允许的本地天气。WeatherKit 需要正式开发者账号启用，侧载期天气不可用时日程简报仍会正常显示。")
         }
@@ -172,3 +174,4 @@ struct SideDrawerView: View {
         )
     }
 }
+
