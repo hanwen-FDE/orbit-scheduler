@@ -50,7 +50,7 @@ enum OrbitThemePreset: String, CaseIterable, Identifiable {
 
 /// 视图里替代硬编码强调色的入口，随用户选择的主题实时变化。
 @MainActor
-var orbitAccent: Color { AppSettings.shared.theme.accent }
+func orbitAccent() -> Color { AppSettings.shared.theme.accent }
 
 /// 单条聊天消息
 struct ChatMessage: Identifiable, Codable, Equatable {
