@@ -5,7 +5,7 @@ enum ChatRole: String, Codable {
 }
 
 enum MessageKind: String, Codable {
-    case text, image, eventCard
+    case text, image, voice, eventCard, briefing
     case habitCard
 }
 
@@ -17,6 +17,8 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     var text: String = ""
     /// 图片消息的缩略图（JPEG 数据）
     var imageData: Data?
+    /// 语音消息时长；转写文本保存在 text 中。
+    var voiceDuration: TimeInterval? = nil
     var event: EventSnapshot?
     /// 独立于日历事件的“习惯提醒”卡片，实际写入系统提醒事项 App。
     var habit: HabitSnapshot? = nil
@@ -100,6 +102,44 @@ struct EventSnapshot: Codable, Equatable {
     /// 仅作为建议，绝不自动移动用户的日程。
     var suggestedStart: Date? = nil
     var deleted: Bool = false
+
+    var isPendingConfirmation: Bool {
+        eventIdentifier == nil && !deleted
+    }
+}
+
+enum OrbitNotificationKind: String, Codable, CaseIterable {
+    case reminder, briefing, conflict, writeFailure, aiFailure
+
+    var title: String {
+        switch self {
+        case .reminder: return "日程提醒"
+        case .briefing: return "每日简报"
+        case .conflict: return "时间冲突"
+        case .writeFailure: return "写入失败"
+        case .aiFailure: return "AI 处理失败"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .reminder: return "bell.fill"
+        case .briefing: return "sun.max.fill"
+        case .conflict: return "exclamationmark.triangle.fill"
+        case .writeFailure: return "calendar.badge.exclamationmark"
+        case .aiFailure: return "wifi.exclamationmark"
+        }
+    }
+}
+
+struct OrbitNotificationItem: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var kind: OrbitNotificationKind
+    var title: String
+    var detail: String
+    var createdAt = Date()
+    var isRead = false
+    var relatedMessageId: UUID?
 }
 
 /// “习惯”不是 Orbit 内部待办；它是同步到苹果“提醒事项”App 的循环 EKReminder。
@@ -153,6 +193,12 @@ final class AppSettings: ObservableObject {
     private let kMorningHour = "orbit.morningBriefingHour"
     private let kMorningMinute = "orbit.morningBriefingMinute"
     private let kWeatherBriefing = "orbit.weatherBriefingEnabled"
+    private let kBriefingConflicts = "orbit.morningBriefingConflicts"
+    private let kBriefingEncouragement = "orbit.morningBriefingEncouragement"
+    private let kBriefingWeekends = "orbit.morningBriefingWeekends"
+    private let kWakeHour = "orbit.wakeHour"
+    private let kSleepHour = "orbit.sleepHour"
+    private let kOnboarding = "orbit.onboardingCompleted"
 
     @Published var defaultCalendarId: String? {
         didSet { UserDefaults.standard.set(defaultCalendarId, forKey: kCalendar) }
@@ -175,6 +221,24 @@ final class AppSettings: ObservableObject {
     @Published var weatherBriefingEnabled: Bool {
         didSet { UserDefaults.standard.set(weatherBriefingEnabled, forKey: kWeatherBriefing) }
     }
+    @Published var morningBriefingShowsConflicts: Bool {
+        didSet { UserDefaults.standard.set(morningBriefingShowsConflicts, forKey: kBriefingConflicts) }
+    }
+    @Published var morningBriefingShowsEncouragement: Bool {
+        didSet { UserDefaults.standard.set(morningBriefingShowsEncouragement, forKey: kBriefingEncouragement) }
+    }
+    @Published var morningBriefingOnWeekends: Bool {
+        didSet { UserDefaults.standard.set(morningBriefingOnWeekends, forKey: kBriefingWeekends) }
+    }
+    @Published var wakeHour: Int {
+        didSet { UserDefaults.standard.set(wakeHour, forKey: kWakeHour) }
+    }
+    @Published var sleepHour: Int {
+        didSet { UserDefaults.standard.set(sleepHour, forKey: kSleepHour) }
+    }
+    @Published var onboardingCompleted: Bool {
+        didSet { UserDefaults.standard.set(onboardingCompleted, forKey: kOnboarding) }
+    }
 
     init() {
         defaultCalendarId = UserDefaults.standard.string(forKey: kCalendar)
@@ -185,6 +249,12 @@ final class AppSettings: ObservableObject {
         morningBriefingHour = UserDefaults.standard.object(forKey: kMorningHour) as? Int ?? 7
         morningBriefingMinute = UserDefaults.standard.object(forKey: kMorningMinute) as? Int ?? 30
         weatherBriefingEnabled = UserDefaults.standard.object(forKey: kWeatherBriefing) as? Bool ?? false
+        morningBriefingShowsConflicts = UserDefaults.standard.object(forKey: kBriefingConflicts) as? Bool ?? true
+        morningBriefingShowsEncouragement = UserDefaults.standard.object(forKey: kBriefingEncouragement) as? Bool ?? true
+        morningBriefingOnWeekends = UserDefaults.standard.object(forKey: kBriefingWeekends) as? Bool ?? true
+        wakeHour = UserDefaults.standard.object(forKey: kWakeHour) as? Int ?? 7
+        sleepHour = UserDefaults.standard.object(forKey: kSleepHour) as? Int ?? 23
+        onboardingCompleted = UserDefaults.standard.bool(forKey: kOnboarding)
     }
 }
 

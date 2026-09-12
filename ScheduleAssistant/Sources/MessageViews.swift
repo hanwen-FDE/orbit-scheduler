@@ -49,6 +49,30 @@ struct MessageRow: View {
                     .frame(maxWidth: 210, maxHeight: 210)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+        case .voice:
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform")
+                    Text(durationText)
+                        .font(.caption.monospacedDigit())
+                }
+                Text(message.text)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .foregroundStyle(.white)
+            .background(bubbleShape.fill(Color.orange))
+        case .briefing:
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("今日简报", systemImage: "sun.max.fill")
+                        .font(.headline).foregroundStyle(.orange)
+                    Spacer()
+                    Text(message.createdAt.shortTime).font(.caption).foregroundStyle(.secondary)
+                }
+                Text(message.text).font(.subheadline)
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 20).fill(Color.orange.opacity(0.10)))
         case .eventCard:
             if let snap = message.event {
                 EventCardView(messageId: message.id, snapshot: snap, onTap: onTapCard)
@@ -63,6 +87,11 @@ struct MessageRow: View {
     private var bubbleShape: some Shape {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
     }
+
+    private var durationText: String {
+        let seconds = Int(message.voiceDuration ?? 0)
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
 }
 
 /// 日程卡片
@@ -75,6 +104,7 @@ struct EventCardView: View {
 
     @State private var showDeleteConfirmation = false
     @State private var showRecurringDeleteOptions = false
+    @State private var showConflictDetails = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -156,35 +186,51 @@ struct EventCardView: View {
                     .foregroundStyle(.secondary)
                     .padding(.vertical, 10)
             } else {
+                if snapshot.isPendingConfirmation {
+                    HStack(spacing: 10) {
+                        Button {
+                            chat.confirmEvent(messageId: messageId)
+                        } label: {
+                            Label("确认添加", systemImage: "checkmark.circle.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.orange)
+                        Button("编辑", action: onTap)
+                            .buttonStyle(.bordered)
+                    }
+                    .padding(.vertical, 10)
+                    Divider()
+                }
                 if let conflicts = snapshot.conflicts, !conflicts.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Label("时间冲突", systemImage: "exclamationmark.triangle.fill")
+                            Label("与 \(conflicts.count) 项日程时间重叠", systemImage: "exclamationmark.triangle.fill")
                                 .font(.subheadline.bold())
                                 .foregroundStyle(.orange)
                             Spacer()
-                            Button("重新检查") { chat.refreshConflicts(messageId: messageId) }
-                                .font(.caption)
+                            Button(showConflictDetails ? "收起" : "查看建议") {
+                                withAnimation { showConflictDetails.toggle() }
+                            }.font(.caption.bold())
                         }
-                        ForEach(conflicts.prefix(2)) { conflict in
-                            Text("《\(conflict.title)》· \(conflict.start.friendlyDay) \(conflict.start.shortTime)–\(conflict.end.shortTime)")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if conflicts.count > 2 {
-                            Text("另有 \(conflicts.count - 2) 项重叠日程")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        if let suggested = snapshot.suggestedStart {
-                            Button {
-                                chat.applySuggestedTime(messageId: messageId)
-                            } label: {
-                                Label("采用建议：\(suggested.friendlyDay) \(suggested.shortTime)", systemImage: "arrow.right.circle.fill")
-                                    .font(.subheadline.bold())
+                        if showConflictDetails {
+                            ForEach(conflicts.prefix(2)) { conflict in
+                                Text("《\(conflict.title)》· \(conflict.start.friendlyDay) \(conflict.start.shortTime)–\(conflict.end.shortTime)")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.borderedProminent)
-                            .tint(.blue)
+                            Button("重新检查冲突") { chat.refreshConflicts(messageId: messageId) }
+                                .font(.caption)
+                            if let suggested = snapshot.suggestedStart {
+                                Button {
+                                    chat.applySuggestedTime(messageId: messageId)
+                                } label: {
+                                    Label("采用建议：\(suggested.friendlyDay) \(suggested.shortTime)", systemImage: "arrow.right.circle.fill")
+                                        .font(.subheadline.bold())
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.orange)
+                            }
                         }
                     }
                     .padding(.vertical, 10)
@@ -226,24 +272,26 @@ struct EventCardView: View {
                 }
                 .padding(.vertical, 10)
 
-                Divider()
+                if !snapshot.isPendingConfirmation {
+                    Divider()
 
-                HStack {
-                    Label("提醒事项", systemImage: "checklist")
-                        .font(.subheadline)
-                    Spacer()
-                    if snapshot.nativeReminderIdentifier != nil {
-                        Button("已同步") { chat.removeNativeReminder(messageId: messageId) }
+                    HStack {
+                        Label("提醒事项", systemImage: "checklist")
+                            .font(.subheadline)
+                        Spacer()
+                        if snapshot.nativeReminderIdentifier != nil {
+                            Button("已同步") { chat.removeNativeReminder(messageId: messageId) }
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.green)
+                        } else {
+                            Button("同步一份到系统提醒事项") {
+                                chat.syncToNativeReminders(messageId: messageId)
+                            }
                             .font(.subheadline.bold())
-                            .foregroundStyle(.green)
-                    } else {
-                        Button("同步到系统提醒事项") {
-                            chat.syncToNativeReminders(messageId: messageId)
                         }
-                        .font(.subheadline.bold())
                     }
+                    .padding(.vertical, 10)
                 }
-                .padding(.vertical, 10)
 
                 Divider()
 
@@ -282,7 +330,9 @@ struct EventCardView: View {
                             .font(.subheadline)
                     }
                     Spacer()
-                    Text("已添加到「\(snapshot.calendarTitle)」")
+                    Text(snapshot.isPendingConfirmation
+                         ? "将添加到「\(snapshot.calendarTitle)」"
+                         : "已添加到「\(snapshot.calendarTitle)」")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

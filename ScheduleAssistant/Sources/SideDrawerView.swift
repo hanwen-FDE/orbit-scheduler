@@ -9,6 +9,7 @@ struct SideDrawerView: View {
 
     @ObservedObject private var app = AppSettings.shared
     @State private var morningReminderStatus = ""
+    @State private var showDeleteConversationConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -16,10 +17,22 @@ struct SideDrawerView: View {
                 iconSection
                 apiSection
                 calendarSection
+                schedulePreferenceSection
                 morningBriefingSection
                 shortcutSection
                 Section {
-                    NavigationLink("使用说明") { UsageGuideView() }
+                    NavigationLink("使用教程") { UsageGuideView() }
+                    Button("重新观看首次教学") {
+                        dismiss()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            app.onboardingCompleted = false
+                        }
+                    }
+                }
+                Section {
+                    Button("删除当前对话", role: .destructive) {
+                        showDeleteConversationConfirmation = true
+                    }
                 }
             }
             .navigationTitle("Orbit")
@@ -29,6 +42,23 @@ struct SideDrawerView: View {
             }
         }
         .presentationDetents([.large])
+        .confirmationDialog("删除当前对话？", isPresented: $showDeleteConversationConfirmation, titleVisibility: .visible) {
+            Button("删除对话", role: .destructive) { chat.clearConversation() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("只删除 Orbit 对话记录，不会删除已经写入 Apple 日历的日程。")
+        }
+    }
+
+    private var schedulePreferenceSection: some View {
+        Section {
+            Stepper("通常 \(app.wakeHour):00 起床", value: $app.wakeHour, in: 4...12)
+            Stepper("通常 \(app.sleepHour):00 睡觉", value: $app.sleepHour, in: 19...24)
+        } header: {
+            Text("智能排程边界")
+        } footer: {
+            Text("只用于筛选合理的冲突重排建议，不会自动创建“习惯”或作息日程。")
+        }
     }
 
     // MARK: - 图标
@@ -114,6 +144,9 @@ struct SideDrawerView: View {
             ))
             if app.morningBriefingEnabled {
                 Toggle("简报显示本地天气", isOn: $app.weatherBriefingEnabled)
+                Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
+                Toggle("显示鼓励语", isOn: $app.morningBriefingShowsEncouragement)
+                Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
                 DatePicker("每日提醒时间", selection: morningTime, displayedComponents: .hourAndMinute)
                 Button("设置每天晨间提醒") {
                     Task {

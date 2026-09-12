@@ -110,6 +110,13 @@ final class CalendarService {
         return store.events(matching: predicate)
             .filter { event in
                 guard event.eventIdentifier != snapshot.eventIdentifier else { return false }
+                // 节假日、生日、天气订阅以及被标记为空闲的事件不阻断用户安排。
+                let title = (event.title ?? "").lowercased()
+                let ignoredTitle = ["天气", "weather", "节假日", "holiday", "生日", "birthday"]
+                    .contains { title.contains($0) }
+                guard !ignoredTitle, event.availability != .free else { return false }
+                // 普通定时日程可以与信息型全天事件共存。
+                if event.isAllDay && !snapshot.isAllDay { return false }
                 return event.startDate < snapshot.end && event.endDate > snapshot.start
             }
             .map {
@@ -124,7 +131,7 @@ final class CalendarService {
             .sorted { $0.start < $1.start }
     }
 
-    /// 从原计划时间起，在未来两周查找同等时长的第一个空档。
+    /// 优先原日期和相近时段，并严格限制在用户清醒时间内。
     /// Orbit 只给出建议，绝不自行移动用户真实日程。
     func suggestedStart(for snapshot: EventSnapshot, searchDays: Int = 14) -> Date? {
         guard EKEventStore.authorizationStatus(for: .event) == .fullAccess,
@@ -133,22 +140,38 @@ final class CalendarService {
 
         let duration = snapshot.end.timeIntervalSince(snapshot.start)
         let calendar = Calendar.current
-        var candidate = roundedUpToQuarterHour(snapshot.start)
-        let searchEnd = calendar.date(byAdding: .day, value: searchDays, to: candidate) ?? candidate
-        let predicate = store.predicateForEvents(withStart: candidate, end: searchEnd, calendars: nil)
-        let events = store.events(matching: predicate)
-            .filter { $0.eventIdentifier != snapshot.eventIdentifier }
-            .sorted { $0.startDate < $1.startDate }
+        let wakeHour = UserDefaults.standard.object(forKey: "orbit.wakeHour") as? Int ?? 7
+        let sleepHour = UserDefaults.standard.object(forKey: "orbit.sleepHour") as? Int ?? 23
+        let originalHour = calendar.component(.hour, from: snapshot.start)
 
-        for event in events {
-            if event.endDate <= candidate { continue }
-            if event.startDate >= candidate.addingTimeInterval(duration) {
+        for dayOffset in 0...searchDays {
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: calendar.startOfDay(for: snapshot.start)),
+                  let wake = calendar.date(bySettingHour: wakeHour, minute: 0, second: 0, of: day),
+                  let sleep = sleepHour == 24
+                    ? calendar.date(byAdding: .day, value: 1, to: day)
+                    : calendar.date(bySettingHour: sleepHour, minute: 0, second: 0, of: day) else { continue }
+            let preferred = calendar.date(bySettingHour: max(wakeHour, min(sleepHour - 1, originalHour)),
+                                          minute: calendar.component(.minute, from: snapshot.start),
+                                          second: 0, of: day) ?? wake
+            var candidate = roundedUpToQuarterHour(max(wake, preferred))
+            let predicate = store.predicateForEvents(withStart: wake, end: sleep, calendars: nil)
+            let events = store.events(matching: predicate)
+                .filter {
+                    $0.eventIdentifier != snapshot.eventIdentifier &&
+                    !$0.isAllDay && $0.availability != .free
+                }
+                .sorted { $0.startDate < $1.startDate }
+
+            for event in events {
+                if event.endDate <= candidate { continue }
+                if event.startDate >= candidate.addingTimeInterval(duration) { break }
+                candidate = roundedUpToQuarterHour(event.endDate)
+            }
+            if candidate >= wake && candidate.addingTimeInterval(duration) <= sleep {
                 return candidate
             }
-            candidate = roundedUpToQuarterHour(max(candidate, event.endDate))
-            if candidate.addingTimeInterval(duration) > searchEnd { return nil }
         }
-        return candidate.addingTimeInterval(duration) <= searchEnd ? candidate : nil
+        return nil
     }
 
     /// 晨间简报使用：只读取当天真正的系统日程，且要求用户已授予完全访问。
@@ -159,6 +182,18 @@ final class CalendarService {
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
         return store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
+    }
+
+    func events(on date: Date) -> [EKEvent] {
+        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: date)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate).sorted { lhs, rhs in
+            if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
+            return lhs.startDate < rhs.startDate
+        }
     }
 
     private func apply(_ snapshot: EventSnapshot, to event: EKEvent) {

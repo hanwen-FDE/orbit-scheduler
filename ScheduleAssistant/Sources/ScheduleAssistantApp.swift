@@ -20,9 +20,35 @@ struct ScheduleAssistantApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ChatView()
+            OrbitRootView()
                 .environmentObject(settings)
                 .environmentObject(chat)
+        }
+    }
+}
+
+struct OrbitRootView: View {
+    @ObservedObject private var app = AppSettings.shared
+    @State private var selection = 0
+
+    var body: some View {
+        TabView(selection: $selection) {
+            TodayScheduleView()
+                .tabItem { Label("今天", systemImage: "calendar.day.timeline.left") }
+                .tag(0)
+            ChatView(selectedTab: $selection)
+                .tabItem { Label("对话", systemImage: "message.fill") }
+                .tag(1)
+        }
+        .tint(.orange)
+        .fullScreenCover(isPresented: Binding(
+            get: { !app.onboardingCompleted },
+            set: { if !$0 { app.onboardingCompleted = true } }
+        )) {
+            OnboardingView {
+                app.onboardingCompleted = true
+                selection = 1
+            }
         }
     }
 }

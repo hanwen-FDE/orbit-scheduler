@@ -56,8 +56,12 @@ final class ChatStore: ObservableObject {
         process(text: nil, image: Self.downscale(image, maxSide: 900))
     }
 
-    func send(voiceTranscript: String) {
-        send(text: voiceTranscript)
+    func send(voiceTranscript: String, duration: TimeInterval = 0) {
+        let trimmed = voiceTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        messages.append(ChatMessage(role: .user, kind: .voice, text: trimmed, voiceDuration: duration))
+        save()
+        process(text: trimmed, image: nil)
     }
 
     func retryLast() {
@@ -67,7 +71,7 @@ final class ChatStore: ObservableObject {
             if lastUser.kind == .image, let data = lastUser.imageData {
                 img = UIImage(data: data)
             }
-            process(text: lastUser.kind == .text ? lastUser.text : nil, image: img)
+            process(text: (lastUser.kind == .text || lastUser.kind == .voice) ? lastUser.text : nil, image: img)
         }
     }
 
@@ -92,7 +96,7 @@ final class ChatStore: ObservableObject {
                 }
                 var snapshots: [EventSnapshot] = []
                 for parsed in events {
-                    snapshots.append(try await writeAuto(parsed: parsed))
+                    snapshots.append(try await prepare(parsed: parsed))
                 }
                 // 回复文案：单项详细说，多项汇总说
                 if snapshots.count == 1 {
@@ -102,18 +106,24 @@ final class ChatStore: ObservableObject {
                     let recurrencePart = snap.recurrence.map { "，\($0.displayText)循环" } ?? ""
                     let conflictPart = (snap.conflicts?.isEmpty == false)
                         ? "\n发现时间冲突，卡片里有可选的新时间建议。" : ""
-                    messages[thinkingIndex].text = "已安排《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(recurrencePart)\(reminderPart)\(conflictPart)"
+                    messages[thinkingIndex].text = "已识别《\(snap.title)》\(snap.start.friendlyDay)\(timePart)\(recurrencePart)\(reminderPart)。请核对卡片后确认添加。\(conflictPart)"
                 } else {
                     let earliest = snapshots.min { $0.start < $1.start }!
                     let conflictCount = snapshots.reduce(0) { $0 + ($1.conflicts?.count ?? 0) }
                     let conflictPart = conflictCount > 0 ? "，其中发现 \(conflictCount) 个时间冲突，可在卡片中查看建议" : ""
-                    messages[thinkingIndex].text = "已识别 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)，全部已写入日历\(conflictPart)"
+                    messages[thinkingIndex].text = "已识别 \(snapshots.count) 项日程，最早《\(earliest.title)》\(earliest.start.friendlyDay) \(earliest.start.shortTime)。请逐项核对并确认添加\(conflictPart)"
                 }
                 for snap in snapshots {
                     messages.append(ChatMessage(role: .assistant, kind: .eventCard, event: snap))
                 }
             } catch {
                 messages[thinkingIndex].text = userFacingErrorMessage(for: error)
+                OrbitNotificationStore.shared.add(
+                    kind: .aiFailure,
+                    title: "AI 处理失败",
+                    detail: messages[thinkingIndex].text,
+                    relatedMessageId: messages[thinkingIndex].id
+                )
             }
             isThinking = false
             save()
@@ -129,15 +139,39 @@ final class ChatStore: ObservableObject {
             switch llmError {
             case .noAPIKey:
                 guidance = "请在左上角的 AI 识别（API）中填写当前服务商的 API Key。"
-            case .http:
-                guidance = "请检查服务商、模型名、接口地址和账户额度后重试。"
+            case .http(let code, _):
+                switch code {
+                case 401, 403:
+                    guidance = "API Key 无效或没有访问权限，请检查当前服务商的凭证。"
+                case 402:
+                    guidance = "API 账户余额或额度不足。"
+                case 408:
+                    guidance = "请求超时，原始输入已保留，可以直接重试。"
+                case 429:
+                    guidance = "请求过于频繁或额度受限，请稍后重试。"
+                case 500...599:
+                    guidance = "AI 服务暂时不可用，请稍后重试；这不代表 API Key 配置错误。"
+                default:
+                    guidance = "请检查服务商、模型名和接口地址后重试。"
+                }
             case .invalidResponse:
                 guidance = "AI 服务已响应，但返回内容无法识别。请重试，或更换支持当前模型的服务商。"
             case .noInput:
                 guidance = "请输入文字或选择图片后再试。"
             }
-        } else if error is URLError {
-            guidance = "请检查网络连接后重试；API 设置已通过测试时，不需要重复填写 Key。"
+        } else if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                guidance = "当前没有可用网络，原始输入已保留。恢复网络后直接重试即可。"
+            case .timedOut:
+                guidance = "网络请求超时，这不代表 API Key 错误，请直接重试。"
+            case .cannotFindHost, .dnsLookupFailed:
+                guidance = "无法连接服务商地址，请检查接口地址、DNS 或代理设置。"
+            case .cancelled:
+                guidance = "请求已取消，原始输入仍然保留。"
+            default:
+                guidance = "网络请求失败；API 测试成功时无需重新填写 Key。"
+            }
         } else {
             guidance = "可以点这里重试；若持续发生，请检查日历权限和系统日历账户。"
         }
@@ -146,7 +180,7 @@ final class ChatStore: ObservableObject {
     }
 
     /// 自动写入默认日历；权限或日历不可用时降级为未写入卡片
-    private func writeAuto(parsed: ParsedEvent) async throws -> EventSnapshot {
+    private func prepare(parsed: ParsedEvent) async throws -> EventSnapshot {
         let status = await CalendarService.shared.ensureAccess()
         guard status == .fullAccess || status == .writeOnly else {
             calendarAccessDenied = true
@@ -184,11 +218,41 @@ final class ChatStore: ObservableObject {
         if !conflicts.isEmpty {
             snapshot.suggestedStart = CalendarService.shared.suggestedStart(for: snapshot)
         }
-        snapshot.eventIdentifier = CalendarService.shared.createEvent(snapshot)
         return snapshot
     }
 
     // MARK: - 卡片操作
+
+    func confirmEvent(messageId: UUID) {
+        guard let index = messages.firstIndex(where: { $0.id == messageId }),
+              var snapshot = messages[index].event,
+              snapshot.eventIdentifier == nil else { return }
+        guard let identifier = CalendarService.shared.createEvent(snapshot) else {
+            let detail = "《\(snapshot.title)》未能写入「\(snapshot.calendarTitle)」，请检查日历权限或更换目标日历后重试。"
+            OrbitNotificationStore.shared.add(kind: .writeFailure, title: "日历写入失败", detail: detail, relatedMessageId: messageId)
+            appendSystemMessage(detail)
+            save()
+            return
+        }
+        snapshot.eventIdentifier = identifier
+        messages[index].event = snapshot
+        OrbitNotificationStore.shared.add(
+            kind: .reminder,
+            title: snapshot.title,
+            detail: "\(snapshot.start.friendlyDay) \(snapshot.isAllDay ? "全天" : snapshot.start.shortTime) · 已添加到「\(snapshot.calendarTitle)」",
+            relatedMessageId: messageId
+        )
+        if snapshot.conflicts?.isEmpty == false {
+            OrbitNotificationStore.shared.add(
+                kind: .conflict,
+                title: "《\(snapshot.title)》存在时间冲突",
+                detail: "与 \(snapshot.conflicts?.count ?? 0) 项安排重叠，请查看重排建议。",
+                relatedMessageId: messageId
+            )
+        }
+        appendSystemMessage("已添加《\(snapshot.title)》到「\(snapshot.calendarTitle)」。")
+        save()
+    }
 
     func updateMessage(_ messageId: UUID, event: EventSnapshot) {
         guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
@@ -218,7 +282,13 @@ final class ChatStore: ObservableObject {
     func changeCalendar(messageId: UUID, to calendarId: String) {
         guard let idx = messages.firstIndex(where: { $0.id == messageId }),
               var snap = messages[idx].event else { return }
-        guard CalendarService.shared.moveToCalendar(snapshot: &snap, to: calendarId) else { return }
+        if snap.eventIdentifier == nil {
+            guard let calendar = CalendarService.shared.availableCalendars().first(where: { $0.calendarIdentifier == calendarId }) else { return }
+            snap.calendarIdentifier = calendarId
+            snap.calendarTitle = calendar.title
+        } else {
+            guard CalendarService.shared.moveToCalendar(snapshot: &snap, to: calendarId) else { return }
+        }
         messages[idx].event = snap
         save()
     }
@@ -226,7 +296,9 @@ final class ChatStore: ObservableObject {
     func applyEdit(messageId: UUID, snapshot: EventSnapshot) {
         var snap = snapshot
         refreshConflictMetadata(for: &snap)
-        CalendarService.shared.updateEvent(&snap)
+        if snap.eventIdentifier != nil {
+            CalendarService.shared.updateEvent(&snap)
+        }
         updateMessage(messageId, event: snap)
         resyncNativeReminderIfNeeded(messageId: messageId, snapshot: snap)
     }
@@ -327,6 +399,66 @@ final class ChatStore: ObservableObject {
             guard msg.kind == .eventCard, let e = msg.event, !e.deleted else { return nil }
             return (msg.id, e)
         }.sorted { $0.snapshot.start < $1.snapshot.start }
+    }
+
+    func ensureDailyBriefing(text: String, date: Date = Date()) {
+        guard AppSettings.shared.morningBriefingEnabled else { return }
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: date)
+        if !AppSettings.shared.morningBriefingOnWeekends && (weekday == 1 || weekday == 7) { return }
+        let existing = messages.firstIndex {
+            $0.kind == .briefing && calendar.isDate($0.createdAt, inSameDayAs: date)
+        }
+        if let existing {
+            messages[existing].text = text
+        } else {
+            messages.append(ChatMessage(role: .assistant, kind: .briefing, text: text, createdAt: date))
+        }
+        let key = date.formatted(.iso8601.year().month().day())
+        OrbitNotificationStore.shared.add(kind: .briefing, title: "今日简报", detail: "\(key) · \(text)", dailyKey: key)
+        save()
+    }
+
+    func clearConversation() {
+        messages = [ChatMessage(role: .assistant, kind: .text, text: "新的对话已经开始。告诉我你的安排吧。")]
+        save()
+    }
+
+    func upsertDailyBriefing(from briefing: DailyBriefingStore) {
+        guard AppSettings.shared.morningBriefingEnabled else { return }
+        let weekday = Calendar.current.component(.weekday, from: Date())
+        if !AppSettings.shared.morningBriefingOnWeekends && (weekday == 1 || weekday == 7) { return }
+
+        var parts = ["\(briefing.greeting)。"]
+        if AppSettings.shared.weatherBriefingEnabled {
+            parts.append(briefing.weatherText ?? "天气暂时无法获取。")
+        }
+        parts.append(briefing.scheduleSummary)
+        let conflicts = allEvents.filter {
+            Calendar.current.isDateInToday($0.snapshot.start) && $0.snapshot.conflicts?.isEmpty == false
+        }.count
+        if AppSettings.shared.morningBriefingShowsConflicts && conflicts > 0 {
+            parts.append("今天有 \(conflicts) 项安排存在时间冲突，请提前确认。")
+        }
+        if AppSettings.shared.morningBriefingShowsEncouragement {
+            parts.append(briefing.encouragement)
+        }
+        let text = parts.joined(separator: "\n")
+        if let index = messages.firstIndex(where: {
+            $0.kind == .briefing && Calendar.current.isDateInToday($0.createdAt)
+        }) {
+            messages[index].text = text
+        } else {
+            messages.append(ChatMessage(role: .assistant, kind: .briefing, text: text))
+        }
+        let key = Date().formatted(.dateTime.year().month().day())
+        OrbitNotificationStore.shared.add(
+            kind: .briefing,
+            title: "今日简报",
+            detail: "\(key) · \(briefing.scheduleSummary)",
+            dailyKey: key
+        )
+        save()
     }
 
     private func refreshConflictMetadata(for snapshot: inout EventSnapshot) {

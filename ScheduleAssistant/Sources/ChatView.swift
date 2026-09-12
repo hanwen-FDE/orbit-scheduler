@@ -9,16 +9,19 @@ struct ChatView: View {
     @StateObject private var speech = SpeechService()
     @StateObject private var briefing = DailyBriefingStore()
     @ObservedObject private var app = AppSettings.shared
+    @Binding var selectedTab: Int
 
     @State private var inputText = ""
     @State private var showPlusPanel = false
     @State private var showDrawer = false
-    @State private var showScheduleList = false
+    @State private var showNotifications = false
     @State private var editingMessage: ChatMessage?
     @State private var photoItem: PhotosPickerItem?
     @State private var showCamera = false
-    @State private var showHabitSheet = false
     @State private var hasScrolledToRestoredMessages = false
+    @State private var discardCurrentRecording = false
+    @State private var recordingStartedAt: Date?
+    @State private var recordingSeconds = 0
     @FocusState private var inputFocused: Bool
 
     private static let chatBottomAnchor = "orbit-chat-bottom"
@@ -26,11 +29,6 @@ struct ChatView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                if app.morningBriefingEnabled {
-                    DailyBriefingCard(store: briefing)
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                }
                 messageList
                 inputBar
             }
@@ -44,16 +42,14 @@ struct ChatView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("日程") { showScheduleList = true }
-                        .font(.subheadline.bold())
+                    NotificationBellButton(isPresented: $showNotifications)
                 }
             }
         }
         .sheet(isPresented: $showDrawer) { SideDrawerView() }
-        .sheet(isPresented: $showScheduleList) { ScheduleListView() }
+        .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
         .sheet(isPresented: $showPlusPanel) { plusPanel }
         .sheet(isPresented: $showCamera) { CameraPicker { sendImage($0) } }
-        .sheet(isPresented: $showHabitSheet) { HabitDetailSheet() }
         .sheet(item: $editingMessage) { msg in
             if let snap = msg.event {
                 EventDetailSheet(messageId: msg.id, snapshot: snap)
@@ -125,63 +121,102 @@ struct ChatView: View {
     // MARK: - 底部输入栏
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
-            Button {
-                inputFocused = false
-                showPlusPanel = true
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(.systemBackground)))
-            }
-
-            TextField("安排点什么？", text: $inputText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...4)
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(Capsule().fill(Color(.systemBackground)))
-                .focused($inputFocused)
-                .onSubmit(sendText)
-
-            if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
-                Button(action: sendText) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(.blue)
-                }
-                .transition(.scale.combined(with: .opacity))
-            } else {
-                Button {
-                    speech.toggle()
-                } label: {
-                    Image(systemName: speech.isRecording ? "stop.circle.fill" : "mic.circle.fill")
-                        .font(.system(size: 30))
-                        .foregroundStyle(speech.isRecording ? .red : .blue)
-                }
-            }
-        }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .animation(.easeInOut(duration: 0.15), value: inputText.isEmpty)
-        .background {
-            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea(edges: .bottom)
-        }
-        .overlay(alignment: .top) {
+        Group {
             if speech.isRecording {
-                HStack(spacing: 8) {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    Text(speech.transcript.isEmpty ? "正在聆听…点红色按钮结束" : speech.transcript)
-                        .lineLimit(1).font(.footnote)
+                recordingBar
+            } else {
+                HStack(spacing: 10) {
+                    Button {
+                        inputFocused = false
+                        showPlusPanel = true
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(width: 34, height: 34)
+                            .background(Circle().fill(Color(.systemBackground)))
+                    }
+                    TextField("安排点什么？", text: $inputText, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .lineLimit(1...4)
+                        .padding(.horizontal, 14).padding(.vertical, 8)
+                        .background(Capsule().fill(Color(.systemBackground)))
+                        .focused($inputFocused)
+                        .onSubmit(sendText)
+                    if !inputText.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Button(action: sendText) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 30)).foregroundStyle(.orange)
+                        }
+                    } else {
+                        Button {
+                            discardCurrentRecording = false
+                            recordingStartedAt = Date()
+                            recordingSeconds = 0
+                            speech.start()
+                        } label: {
+                            Image(systemName: "mic.circle.fill")
+                                .font(.system(size: 30)).foregroundStyle(.orange)
+                        }
+                    }
                 }
-                .padding(.horizontal, 14).padding(.vertical, 6)
-                .background(Capsule().fill(.thinMaterial))
-                .offset(y: -8)
+                .padding(.horizontal, 12).padding(.vertical, 8)
             }
         }
+        .animation(.easeInOut(duration: 0.18), value: speech.isRecording)
+        .background(.ultraThinMaterial)
+        .ignoresSafeArea(edges: .bottom)
         .onChange(of: speech.isRecording) { old, new in
             if old && !new {
                 let transcript = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !transcript.isEmpty { chat.send(text: transcript) }
+                if !discardCurrentRecording && !transcript.isEmpty {
+                    chat.send(voiceTranscript: transcript, duration: TimeInterval(recordingSeconds))
+                }
+                recordingStartedAt = nil
+            }
+        }
+    }
+
+    private var recordingBar: some View {
+        VStack(spacing: 9) {
+            HStack {
+                Text(String(format: "%d:%02d", recordingSeconds / 60, recordingSeconds % 60))
+                    .font(.caption.monospacedDigit())
+                TimelineView(.animation(minimumInterval: 0.12)) { timeline in
+                    HStack(spacing: 3) {
+                        ForEach(0..<28, id: \.self) { index in
+                            let phase = timeline.date.timeIntervalSinceReferenceDate * 4 + Double(index)
+                            Capsule()
+                                .fill(index < 20 ? Color.orange : Color.secondary.opacity(0.25))
+                                .frame(width: 3, height: 5 + abs(sin(phase)) * 18)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            HStack {
+                Button {
+                    discardCurrentRecording = true
+                    speech.stop()
+                } label: {
+                    Image(systemName: "trash").font(.title3)
+                }
+                Spacer()
+                Text(speech.transcript.isEmpty ? "正在聆听…" : speech.transcript)
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Spacer()
+                Button { speech.stop() } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.title3.bold()).foregroundStyle(.white)
+                        .frame(width: 52, height: 52)
+                        .background(Circle().fill(Color.orange))
+                }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .task(id: recordingStartedAt) {
+            while speech.isRecording {
+                try? await Task.sleep(for: .seconds(1))
+                if speech.isRecording { recordingSeconds += 1 }
             }
         }
     }
@@ -214,20 +249,6 @@ struct ChatView: View {
                             .frame(width: 64, height: 64)
                             .background(Circle().fill(Color(.secondarySystemBackground)))
                         Text("相机").font(.footnote).foregroundStyle(.primary)
-                    }
-                }
-                Button {
-                    showPlusPanel = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        showHabitSheet = true
-                    }
-                } label: {
-                    VStack(spacing: 8) {
-                        Image(systemName: "leaf")
-                            .font(.system(size: 24))
-                            .frame(width: 64, height: 64)
-                            .background(Circle().fill(Color(.secondarySystemBackground)))
-                        Text("习惯").font(.footnote).foregroundStyle(.primary)
                     }
                 }
             }
@@ -263,6 +284,11 @@ struct ChatView: View {
 
     private func refreshBriefingAndHandleShortcut() {
         briefing.refresh()
+        if app.morningBriefingEnabled {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                chat.upsertDailyBriefing(from: briefing)
+            }
+        }
         handleShortcutRequest()
     }
 
@@ -272,7 +298,7 @@ struct ChatView: View {
         case .compose:
             DispatchQueue.main.async { inputFocused = true }
         case .today:
-            showScheduleList = true
+            selectedTab = 0
         }
     }
 }
