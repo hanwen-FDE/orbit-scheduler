@@ -183,7 +183,7 @@ enum MorningBriefingScheduler {
     }
 }
 
-/// 晚报的每日本地通知（时间 = 睡前 30 分钟，由 AppSettings.eveningBriefingTime 决定）
+/// 晚报的每日本地通知（时间由用户在每日播报设置中直接选择）。
 enum EveningBriefingScheduler {
     static let notificationIdentifier = "orbit.evening-briefing"
 
@@ -272,7 +272,7 @@ struct DailyBriefingCard: View {
                 ForEach(store.todayEvents.prefix(3)) { event in
                     HStack(spacing: 8) {
                         Image(systemName: "calendar")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(orbitAccent())
                         Text(event.title)
                             .lineLimit(1)
                         Spacer()
@@ -300,4 +300,3 @@ struct DailyBriefingCard: View {
         )
     }
 }
-

@@ -42,7 +42,7 @@ struct ChatView: View {
                             Button(action: onClose) {
                                 Image(systemName: "chevron.backward")
                                     .font(.system(size: 17, weight: .semibold))
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(orbitAccent())
                             }
                             .accessibilityLabel("回到今天")
                         }
@@ -131,48 +131,39 @@ struct ChatView: View {
         .onTapGesture { inputFocused = false }
     }
 
-    // MARK: - 底部输入栏（辐条悬浮胶囊：＋ / 语音长条或键盘 / 模式切换圆钮）
+    // MARK: - 底部输入栏（纯白三分区胶囊：＋ / 主输入 / 键盘或语音）
 
     private var inputBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 0) {
             Button {
                 inputFocused = false
                 showPlusPanel = true
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color(.systemBackground)))
+                    .foregroundStyle(orbitAccent())
+                    .frame(width: 54, height: 62)
             }
             .buttonStyle(.plain)
 
+            inputDivider
             if inputMode == .voice {
                 voiceSegment
             } else {
                 keyboardSegment
             }
-
+            inputDivider
             modeToggle
         }
-        .padding(.horizontal, 6).padding(.vertical, 6)
+        .frame(minHeight: 62)
         .background(
             Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
+                .fill(Color(.systemBackground))
                 .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
         )
-        .overlay {
-            Capsule(style: .continuous)
-                .stroke(
-                    LinearGradient(
-                        colors: [orbitAccent(), orbitAccent().opacity(0.28)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    lineWidth: 1.2
-                )
-        }
-        .padding(.horizontal, 10)
-        .padding(.bottom, 8)
+        .clipShape(Capsule(style: .continuous))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
         .onChange(of: speech.isRecording) { old, new in
             if old && !new {
                 let transcript = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -186,51 +177,52 @@ struct ChatView: View {
 
     /// 语音态中间长条：点按开始/结束录音；录音中显示时长与转写。
     private var voiceSegment: some View {
-        Button {
-            if speech.isRecording {
-                speech.stop()
-            } else {
-                discardCurrentRecording = false
-                recordingStartedAt = Date()
-                recordingSeconds = 0
-                speech.start()
-            }
-        } label: {
-            HStack(spacing: 10) {
+        HStack(spacing: 10) {
+            Button {
                 if speech.isRecording {
-                    Image(systemName: "waveform")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(orbitAccent())
-                    Text(String(format: "%d:%02d", recordingSeconds / 60, recordingSeconds % 60))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(orbitAccent())
-                    Text(speech.transcript.isEmpty ? "正在聆听…" : speech.transcript)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Button {
-                        discardCurrentRecording = true
-                        speech.stop()
-                    } label: {
-                        Image(systemName: "trash")
-                            .font(.footnote)
-                            .foregroundStyle(.red)
+                    speech.stop()
+                } else {
+                    discardCurrentRecording = false
+                    recordingStartedAt = Date()
+                    recordingSeconds = 0
+                    speech.start()
+                }
+            } label: {
+                if speech.isRecording {
+                    HStack(spacing: 8) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(orbitAccent())
+                        Text(String(format: "%d:%02d", recordingSeconds / 60, recordingSeconds % 60))
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(orbitAccent())
+                        Text(speech.transcript.isEmpty ? "正在聆听…" : speech.transcript)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
                     }
                 } else {
                     Image(systemName: "mic.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundStyle(orbitAccent())
-                    Text("点按说话，比如：明天上午十点门诊随访")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .padding(.horizontal, 14).padding(.vertical, 9)
-            .background(Capsule(style: .continuous).fill(Color(.systemBackground)))
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            if speech.isRecording {
+                Button {
+                    discardCurrentRecording = true
+                    speech.stop()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .padding(.trailing, 12)
+                }
+                .buttonStyle(.plain)
+            }
         }
-        .buttonStyle(.plain)
         .task(id: recordingStartedAt) {
             while speech.isRecording {
                 try? await Task.sleep(for: .seconds(1))
@@ -256,11 +248,11 @@ struct ChatView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 14).padding(.vertical, 9)
-        .background(Capsule(style: .continuous).fill(Color(.systemBackground)))
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity, minHeight: 62)
     }
 
-    /// 右侧圆形切换钮：语音态显示键盘、键盘态显示麦克风。
+    /// 右侧模式按钮：语音态显示键盘、键盘态显示麦克风。
     private var modeToggle: some View {
         Button {
             inputFocused = false
@@ -269,12 +261,17 @@ struct ChatView: View {
         } label: {
             Image(systemName: inputMode == .voice ? "keyboard" : "mic.fill")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(orbitAccent()))
+                .foregroundStyle(orbitAccent())
+                .frame(width: 54, height: 62)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(inputMode == .voice ? "切换到键盘输入" : "切换到语音输入")
+    }
+
+    private var inputDivider: some View {
+        Rectangle()
+            .fill(Color(.separator).opacity(0.45))
+            .frame(width: 1, height: 28)
     }
 
     // MARK: - ＋ 面板
@@ -288,9 +285,10 @@ struct ChatView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "photo")
                             .font(.system(size: 24))
+                            .foregroundStyle(orbitAccent())
                             .frame(width: 64, height: 64)
                             .background(Circle().fill(Color(.secondarySystemBackground)))
-                        Text("照片").font(.footnote).foregroundStyle(.primary)
+                        Text("照片").font(.footnote).foregroundStyle(orbitAccent())
                     }
                 }
                 Button {
@@ -302,9 +300,10 @@ struct ChatView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "camera")
                             .font(.system(size: 24))
+                            .foregroundStyle(orbitAccent())
                             .frame(width: 64, height: 64)
                             .background(Circle().fill(Color(.secondarySystemBackground)))
-                        Text("相机").font(.footnote).foregroundStyle(.primary)
+                        Text("相机").font(.footnote).foregroundStyle(orbitAccent())
                     }
                 }
             }

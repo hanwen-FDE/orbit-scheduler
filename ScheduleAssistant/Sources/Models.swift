@@ -11,14 +11,13 @@ enum MessageKind: String, Codable {
     case eveningBriefing
 }
 
-/// 全局主题预设：7 色（去掉红色与亮绿，新增墨绿/藏青），默认蓝。
+/// 全局主题预设：按产品设定固定为 6 色，默认蓝。
 enum OrbitThemePreset: String, CaseIterable, Identifiable {
     case blue
     case yellow
     case purple
-    case skyBlue
-    case deepBlue
-    case inkGreen
+    case lightGreen
+    case deepGreen
     case navy
 
     var id: String { rawValue }
@@ -28,9 +27,8 @@ enum OrbitThemePreset: String, CaseIterable, Identifiable {
         case .blue: return Color(red: 0.18, green: 0.49, blue: 0.96)     // #2F7CF6
         case .yellow: return Color(red: 0.96, green: 0.77, blue: 0.19)   // #F5C531
         case .purple: return Color(red: 0.36, green: 0.31, blue: 0.83)   // #5B4FD4
-        case .skyBlue: return Color(red: 0.36, green: 0.76, blue: 0.94)  // #5BC2F0
-        case .deepBlue: return Color(red: 0.15, green: 0.39, blue: 0.92) // #2563EB
-        case .inkGreen: return Color(red: 0.03, green: 0.36, blue: 0.04) // #085C0A
+        case .lightGreen: return Color(red: 0.27, green: 0.73, blue: 0.53) // #45B987
+        case .deepGreen: return Color(red: 0.03, green: 0.36, blue: 0.04) // #085C0A
         case .navy: return Color(red: 0.03, green: 0.04, blue: 0.36)     // #080A5C
         }
     }
@@ -51,7 +49,7 @@ struct OrbitBrandMark: View {
                 .frame(width: 24, height: 13)
                 .rotationEffect(.degrees(-43))
             Text("Orbit 轨迹")
-                .font(.headline)
+                .font(.title3.bold())
                 .foregroundStyle(app.theme.accent)
         }
     }
@@ -271,6 +269,8 @@ final class AppSettings: ObservableObject {
     private let kMorningBriefing = "orbit.morningBriefingEnabled"
     private let kMorningHour = "orbit.morningBriefingHour"
     private let kMorningMinute = "orbit.morningBriefingMinute"
+    private let kEveningHour = "orbit.eveningBriefingHour"
+    private let kEveningMinute = "orbit.eveningBriefingMinute"
     private let kWeatherBriefing = "orbit.weatherBriefingEnabled"
     private let kBriefingConflicts = "orbit.morningBriefingConflicts"
     private let kBriefingWeekends = "orbit.morningBriefingWeekends"
@@ -281,8 +281,6 @@ final class AppSettings: ObservableObject {
     private let kEveningBriefing = "orbit.eveningBriefingEnabled"
     private let kTheme = "orbit.theme"
     private let kVisibleCalendars = "orbit.visibleCalendarIds"
-    private let kMorningOffset = "orbit.morningBriefingOffsetMinutes"
-    private let kEveningOffset = "orbit.eveningBriefingOffsetMinutes"
     private let kOnboarding = "orbit.onboardingCompleted"
 
     @Published var defaultCalendarId: String? {
@@ -313,6 +311,12 @@ final class AppSettings: ObservableObject {
     @Published var morningBriefingMinute: Int {
         didSet { UserDefaults.standard.set(morningBriefingMinute, forKey: kMorningMinute) }
     }
+    @Published var eveningBriefingHour: Int {
+        didSet { UserDefaults.standard.set(eveningBriefingHour, forKey: kEveningHour) }
+    }
+    @Published var eveningBriefingMinute: Int {
+        didSet { UserDefaults.standard.set(eveningBriefingMinute, forKey: kEveningMinute) }
+    }
     @Published var weatherBriefingEnabled: Bool {
         didSet { UserDefaults.standard.set(weatherBriefingEnabled, forKey: kWeatherBriefing) }
     }
@@ -341,13 +345,6 @@ final class AppSettings: ObservableObject {
     @Published var visibleCalendarIds: [String]? {
         didSet { UserDefaults.standard.set(visibleCalendarIds, forKey: kVisibleCalendars) }
     }
-    /// 晨报 = 起床后 N 分钟；晚报 = 睡前 N 分钟（教学页/设置可调）
-    @Published var morningBriefingOffsetMinutes: Int {
-        didSet { UserDefaults.standard.set(morningBriefingOffsetMinutes, forKey: kMorningOffset) }
-    }
-    @Published var eveningBriefingOffsetMinutes: Int {
-        didSet { UserDefaults.standard.set(eveningBriefingOffsetMinutes, forKey: kEveningOffset) }
-    }
     @Published var theme: OrbitThemePreset {
         didSet { UserDefaults.standard.set(theme.rawValue, forKey: kTheme) }
     }
@@ -355,16 +352,13 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(onboardingCompleted, forKey: kOnboarding) }
     }
 
-    /// 晨间播报时间 = 起床后 N 分钟；晚报时间 = 睡前 N 分钟（N 可在设置中调整）。
+    /// 晨报和晚报均由用户直接选择固定的每天推送时间。
     var morningBriefingTime: (hour: Int, minute: Int) {
-        let total = wakeHour * 60 + wakeMinute + morningBriefingOffsetMinutes
-        return (total / 60 % 24, total % 60)
+        (morningBriefingHour, morningBriefingMinute)
     }
 
     var eveningBriefingTime: (hour: Int, minute: Int) {
-        let total = sleepHour * 60 + sleepMinute - eveningBriefingOffsetMinutes
-        let clamped = total < 0 ? total + 24 * 60 : total
-        return (clamped / 60 % 24, clamped % 60)
+        (eveningBriefingHour, eveningBriefingMinute)
     }
 
     init() {
@@ -375,6 +369,8 @@ final class AppSettings: ObservableObject {
         morningBriefingEnabled = UserDefaults.standard.object(forKey: kMorningBriefing) as? Bool ?? true
         morningBriefingHour = UserDefaults.standard.object(forKey: kMorningHour) as? Int ?? 7
         morningBriefingMinute = UserDefaults.standard.object(forKey: kMorningMinute) as? Int ?? 30
+        eveningBriefingHour = UserDefaults.standard.object(forKey: kEveningHour) as? Int ?? 22
+        eveningBriefingMinute = UserDefaults.standard.object(forKey: kEveningMinute) as? Int ?? 30
         weatherBriefingEnabled = UserDefaults.standard.object(forKey: kWeatherBriefing) as? Bool ?? false
         morningBriefingShowsConflicts = UserDefaults.standard.object(forKey: kBriefingConflicts) as? Bool ?? true
         morningBriefingOnWeekends = UserDefaults.standard.object(forKey: kBriefingWeekends) as? Bool ?? true
@@ -384,8 +380,6 @@ final class AppSettings: ObservableObject {
         sleepMinute = UserDefaults.standard.object(forKey: kSleepMinute) as? Int ?? 0
         eveningBriefingEnabled = UserDefaults.standard.object(forKey: kEveningBriefing) as? Bool ?? true
         visibleCalendarIds = UserDefaults.standard.stringArray(forKey: kVisibleCalendars)
-        morningBriefingOffsetMinutes = UserDefaults.standard.object(forKey: kMorningOffset) as? Int ?? 30
-        eveningBriefingOffsetMinutes = UserDefaults.standard.object(forKey: kEveningOffset) as? Int ?? 30
         theme = OrbitThemePreset(rawValue: UserDefaults.standard.string(forKey: kTheme) ?? "") ?? .blue
         onboardingCompleted = UserDefaults.standard.bool(forKey: kOnboarding)
         if let calendarId = defaultCalendarId,

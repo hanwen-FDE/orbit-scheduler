@@ -103,6 +103,9 @@ class OpenAICompatProvider: LLMProvider {
     每个元素的字段：
     {"title": "日程标题(字符串,必填,简短)", "emoji": "一个最贴合日程主题的emoji字符", "startDate": "开始时间,ISO8601格式如2026-09-10T14:00:00+08:00", "endDate": "结束时间,ISO8601格式,可null", "location": "地点,可null", "notes": "补充说明,可null", "isAllDay": 是否全天(布尔), "recurrence": {"frequency":"daily|weekdays|weekly|monthly|yearly", "interval": 正整数} 或 null, "confidence": 置信度0到1的小数}
     注意：
+    - 只有当输入同时能判断出“做什么”和“什么时候”时，才允许输出事件。问候、闲聊、提问、感想、测试 API、没有明确时间或没有明确事项的内容，一律返回 {"events":[]}。
+    - 禁止猜测、补全或把普通输入默认成“会议”。没有出现会议语义时，不得生成标题为“会议”的事件。
+    - 每个输出事件都必须有非空 title、明确且可解析的 startDate；不确定时间时不要用当前时间代替，直接返回空数组。
     - 内容里有几项日程，events 数组就放几个元素：整场会议只给名称和起止时间时输出 1 项；多行罗列的日程表（每行一项）要逐项输出，不可合并。
     - 用户没说年份时按当前时间推算合理的年份；没说结束时间时 endDate 填 null。
     - 仅当用户明确要求循环（例如“每天”“工作日”“每周”“每两周”“每月”“每年”）才填写 recurrence；没有循环就填 null。interval 默认 1；“每两周”填 weekly + interval 2。
@@ -390,4 +393,3 @@ final class LLMSettings: ObservableObject {
         "orbit.llm.api-key.\(providerId)"
     }
 }
-

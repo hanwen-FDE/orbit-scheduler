@@ -10,7 +10,7 @@ struct UsageGuideView: View {
                 section("① 输入方式", """
 文字：在“对话”页底部输入框直接打字，点箭头发送。
 
-语音：点右侧麦克风开始说话，再点高亮按钮结束，识别后自动发送。
+语音：默认点输入卡片中间的麦克风开始说话，再点一次结束，识别后自动发送；右侧按钮可切换键盘输入。
 
 图片：点左侧 ＋ 选择「照片」或「相机」，选取含日程信息的图片（课程表、会议通知等）。
 
@@ -39,7 +39,7 @@ struct UsageGuideView: View {
 删除循环日程时可选择只删当前一次，或删当前及后续。
 """)
                 section("④ 主题配色", """
-左上角头像 → 「主题配色」：灰+蓝（默认）、石墨+靛蓝、炭灰+松绿等多套配色，App 内按钮和卡片强调色会即时跟随。
+左上角 Orbit →「主题配色」可选择蓝、黄、紫、浅绿、深绿和深紫蓝黑；App 内按钮和卡片强调色会即时跟随。
 """)
                 section("⑤ 设置 API Key", """
 AI 识别需要大模型的 API Key：
@@ -51,16 +51,14 @@ AI 识别需要大模型的 API Key：
 高级用户可在同一页修改接口地址和模型名，或选“自定义（OpenAI 兼容）”。API Key 保存在本机 iPhone Keychain 中。
 """)
                 section("⑥ 简报设置", """
-早报：起床后 30 分钟自动推送到对话窗口，汇总天气（可选）、今天的安排和冲突。
+晨报、晚报均可在左上角 Orbit →「每日播报」中分别开启，并直接选择每天的推送时间。
 
-晚报：睡前 30 分钟总结今天有几项任务、还剩几项。
-
-时间都由“默认设置”里的作息自动推算，无需手动设置。开关在头像 → 「简报设置」中。
+晨报会汇总天气（可选）、今天的安排和冲突；晚报会总结今天的安排情况。
 """)
                 section("⑦ 通知与跳转", """
 右上角铃铛保存日程提醒、每日简报、时间冲突等信息；点击通知条目可直接跳转到对应的日程卡片进行修改。
 
-对话页右上角日历图标可打开“今天”页，按时间展示 Apple 日历中的当天安排，可左右翻页查看前后几天。
+对话页左上角返回按钮可回到“今天”页，按时间轴展示 Apple 日历中的当天安排，可左右翻页查看前后几天。
 """)
                 section("⑧ 常见问题", """
 • 提醒不弹出：检查系统「设置 → 通知 → Orbit」是否允许通知，以及日历账户的提醒是否开启。
@@ -99,7 +97,6 @@ struct OnboardingView: View {
     let onComplete: () -> Void
 
     private let totalPages = 7
-    private let offsetChoices = [5, 10, 15, 20, 30, 45, 60, 90, 120]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -111,7 +108,7 @@ struct OnboardingView: View {
             .padding()
 
             TabView(selection: $page) {
-                // 1. 总介绍：Slogan + 痛点
+                // 1. 总介绍：与 GitHub 首页保持一致的产品句。
                 VStack(spacing: 18) {
                     Ellipse()
                         .stroke(
@@ -121,12 +118,12 @@ struct OnboardingView: View {
                         )
                         .frame(width: 120, height: 60)
                         .rotationEffect(.degrees(-43))
-                        .offset(y: -16)
-                        .padding(.bottom, 18)
-                    Text("所有计划，运行于时间轨道。")
-                        .font(.largeTitle.bold())
+                        .offset(y: -26)
+                        .padding(.bottom, 28)
+                    Text("All your plans run on time orbit.")
+                        .font(.title.bold())
                         .multilineTextAlignment(.center)
-                    Text("Every plan, on its orbit.")
+                    Text("所有计划，运行于时间轨道。")
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .italic()
@@ -159,19 +156,15 @@ struct OnboardingView: View {
                     time: sleepTime
                 ).tag(2)
 
-                // 4. 播报偏移：先选中，再滚轮
+                // 4. 播报时间：在首次导览中即可直接选择每天的时间。
                 VStack(spacing: 18) {
                     onboardingHeader(
                         icon: "newspaper.fill",
                         title: "播报时间微调",
-                        detail: "决定早报、晚报距离起床/睡觉多少分钟推送"
+                        detail: "选择晨报和晚报每天推送到 Orbit 的时间"
                     )
-                    offsetPicker(title: "晨报 · 起床后",
-                                 isSelected: app.morningBriefingEnabled,
-                                 selection: $app.morningBriefingOffsetMinutes)
-                    offsetPicker(title: "晚报 · 睡觉前",
-                                 isSelected: app.eveningBriefingEnabled,
-                                 selection: $app.eveningBriefingOffsetMinutes)
+                    briefingTimePicker(title: "晨报", isSelected: $app.morningBriefingEnabled, time: morningBriefingDate)
+                    briefingTimePicker(title: "晚报", isSelected: $app.eveningBriefingEnabled, time: eveningBriefingDate)
                 }
                 .padding(26).tag(3)
 
@@ -216,10 +209,14 @@ struct OnboardingView: View {
             Button(page == totalPages - 1 ? "开始使用 Orbit" : "继续") {
                 if page == totalPages - 1 {
                     Task {
-                        let morning = app.morningBriefingTime
-                        let evening = app.eveningBriefingTime
-                        _ = await MorningBriefingScheduler.enable(hour: morning.hour, minute: morning.minute)
-                        _ = await EveningBriefingScheduler.enable(hour: evening.hour, minute: evening.minute)
+                        if app.morningBriefingEnabled {
+                            let morning = app.morningBriefingTime
+                            _ = await MorningBriefingScheduler.enable(hour: morning.hour, minute: morning.minute)
+                        }
+                        if app.eveningBriefingEnabled {
+                            let evening = app.eveningBriefingTime
+                            _ = await EveningBriefingScheduler.enable(hour: evening.hour, minute: evening.minute)
+                        }
                     }
                     onComplete()
                 } else {
@@ -277,32 +274,18 @@ struct OnboardingView: View {
         .padding(30)
     }
 
-    /// “先选中再滑动”的播报偏移模块。
-    private func offsetPicker(title: String, isSelected: Bool, selection: Binding<Int>) -> some View {
-        VStack(spacing: 8) {
-            Toggle(isOn: Binding(
-                get: { isSelected },
-                set: { on in
-                    if title.hasPrefix("晨报") { app.morningBriefingEnabled = on }
-                    else { app.eveningBriefingEnabled = on }
-                }
-            )) {
+    private func briefingTimePicker(title: String, isSelected: Binding<Bool>, time: Binding<Date>) -> some View {
+        HStack {
+            Toggle(isOn: isSelected) {
                 Text(title)
                     .font(.headline)
             }
             .tint(orbitAccent())
-            .padding(.horizontal, 6)
-            if isSelected {
-                Picker("", selection: selection) {
-                    ForEach(offsetChoices, id: \.self) { minutes in
-                        Text("\(minutes) 分钟").tag(minutes)
-                    }
-                }
-                .pickerStyle(.wheel)
-                .frame(height: 110)
-                .frame(maxWidth: 220)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color(.systemBackground)))
-            }
+            Spacer()
+            DatePicker("", selection: time, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .disabled(!isSelected.wrappedValue)
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 18).fill(Color(.systemBackground)))
@@ -409,6 +392,36 @@ struct OnboardingView: View {
             set: { date in
                 app.sleepHour = Calendar.current.component(.hour, from: date)
                 app.sleepMinute = Calendar.current.component(.minute, from: date)
+            }
+        )
+    }
+
+    private var morningBriefingDate: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: app.morningBriefingHour,
+                                         minute: app.morningBriefingMinute,
+                                         second: 0,
+                                         of: Date()) ?? Date()
+            },
+            set: { date in
+                app.morningBriefingHour = Calendar.current.component(.hour, from: date)
+                app.morningBriefingMinute = Calendar.current.component(.minute, from: date)
+            }
+        )
+    }
+
+    private var eveningBriefingDate: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: app.eveningBriefingHour,
+                                         minute: app.eveningBriefingMinute,
+                                         second: 0,
+                                         of: Date()) ?? Date()
+            },
+            set: { date in
+                app.eveningBriefingHour = Calendar.current.component(.hour, from: date)
+                app.eveningBriefingMinute = Calendar.current.component(.minute, from: date)
             }
         )
     }

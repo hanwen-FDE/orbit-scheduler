@@ -102,6 +102,13 @@ final class ChatStore: ObservableObject {
     // MARK: - 识别管线
 
     private func process(text: String?, image: UIImage?) {
+        // 第一层：纯文字必须同时具备“何时”与“做什么”的最基本线索。
+        // 这能在请求模型前拦住问候、闲聊和 API 测试文字，避免被错误写成默认“会议”。
+        if image == nil, let text, !looksLikeScheduleRequest(text) {
+            appendSystemMessage("我还没有看到明确的日程。请告诉我“什么时候 + 做什么”，例如“明天上午 10 点门诊随访”；也可以发一张包含日程的图片。")
+            save()
+            return
+        }
         let settings = LLMSettings.shared
         let provider = settings.activeProvider
         let config = settings.config(for: provider)
@@ -111,9 +118,12 @@ final class ChatStore: ObservableObject {
 
         Task {
             do {
-                let events = try await provider.parseSchedule(text: text, image: image, config: config)
+                let parsedEvents = try await provider.parseSchedule(text: text, image: image, config: config)
+                // 第二层：模型回包不能缺少标题或明确的开始时间；低置信度和“凭空默认会议”
+                // 不得进入 EventKit。图片允许由模型判断内容，但仍受结构校验约束。
+                let events = parsedEvents.filter { isWriteEligible($0, sourceText: text) }
                 guard !events.isEmpty else {
-                    messages[thinkingIndex].text = "这段内容里我没找到日程信息，换个说法试试？例如：明天上午10点开会"
+                    messages[thinkingIndex].text = "我没有识别到可确认写入的日程，所以不会新建任何事件。请补充具体的时间和事项，例如“明天上午 10 点门诊随访”。"
                     isThinking = false
                     save()
                     return
@@ -166,6 +176,37 @@ final class ChatStore: ObservableObject {
             isThinking = false
             save()
         }
+    }
+
+    /// 文本日程最低限度需要“时间线索 + 事项线索”。这不是解析器，只负责拒绝显然不是日程的输入。
+    private func looksLikeScheduleRequest(_ text: String) -> Bool {
+        let normalized = text
+            .lowercased()
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "，", with: "")
+            .replacingOccurrences(of: "。", with: "")
+        let timeSignals = ["今天", "明天", "后天", "星期", "周一", "周二", "周三", "周四", "周五", "周六", "周日", "上午", "下午", "早上", "中午", "晚上", "凌晨", "每周", "每天", "tomorrow", "today", "am", "pm"]
+        let activitySignals = ["开会", "会议", "门诊", "随访", "预约", "上课", "课程", "吃饭", "吃", "运动", "锻炼", "健身", "跑步", "工作", "上班", "复习", "学习", "考试", "提醒", "拜访", "出发", "接", "送", "看", "办理", "旅行", "聚", "约", "剪", "睡", "起床", "生日", "活动", "体检", "就诊", "治疗", "打电话", "电话", "提交", "购物", "买", "回家", "面试", "检查", "取", "拿", "见", "聊", "写", "读", "做", "meeting", "appointment", "class", "workout"]
+        let hasClockOrDate = normalized.range(
+            of: #"\d{1,2}[:：]\d{2}|\d{1,2}(点|时)|\d{1,2}月\d{1,2}(日|号)|\d{4}[-/]\d{1,2}[-/]\d{1,2}"#,
+            options: .regularExpression
+        ) != nil
+        let hasTime = hasClockOrDate || timeSignals.contains { normalized.contains($0) }
+        let hasActivity = activitySignals.contains { normalized.contains($0) }
+        return hasTime && hasActivity
+    }
+
+    /// 第三层：即使模型已返回 JSON，也必须满足写入前的完整性约束。
+    private func isWriteEligible(_ event: ParsedEvent, sourceText: String?) -> Bool {
+        let title = event.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, event.resolvedStartDate != nil else { return false }
+        if let confidence = event.confidence, confidence < 0.55 { return false }
+        // 当输入文本从未出现会议语义时，拒绝模型凭空给出的通用“会议”标题。
+        if ["会议", "日程", "事件", "安排"].contains(title), let sourceText {
+            let matchingTerms = [title, "开会", "会诊", "组会"]
+            guard matchingTerms.contains(where: { sourceText.contains($0) }) else { return false }
+        }
+        return true
     }
 
     /// 接续对话：把修正语和原日程交给模型，原地更新同一条日程与卡片。
@@ -320,7 +361,11 @@ final class ChatStore: ObservableObject {
             throw NSError(domain: "orbit", code: 2,
                           userInfo: [NSLocalizedDescriptionKey: "没有可写入的日历，请在系统日历中确认已登录账户"])
         }
-        let start = parsed.resolvedStartDate ?? Date()
+        // 上游 isWriteEligible 已验证；这里仍不使用 Date() 兜底，避免任意输入写成“现在”的日程。
+        guard let start = parsed.resolvedStartDate else {
+            throw NSError(domain: "orbit", code: 3,
+                          userInfo: [NSLocalizedDescriptionKey: "日程缺少明确开始时间"])
+        }
         let end: Date
         if parsed.isAllDay == true {
             end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: start)) ?? start
@@ -622,7 +667,15 @@ final class ChatStore: ObservableObject {
 
     func upsertDailyBriefing(from briefing: DailyBriefingStore) {
         guard AppSettings.shared.morningBriefingEnabled else { return }
-        let weekday = Calendar.current.component(.weekday, from: Date())
+        let now = Date()
+        let calendar = Calendar.current
+        let due = calendar.date(bySettingHour: AppSettings.shared.morningBriefingTime.hour,
+                                minute: AppSettings.shared.morningBriefingTime.minute,
+                                second: 0,
+                                of: now) ?? now
+        // 只有到达用户设定的晨报时间后，才在对话里生成；提前打开 App 不会产生一条错误的“晨报”。
+        guard now >= due else { return }
+        let weekday = calendar.component(.weekday, from: now)
         if !AppSettings.shared.morningBriefingOnWeekends && (weekday == 1 || weekday == 7) { return }
 
         var parts = ["\(briefing.greeting)。"]
@@ -638,7 +691,7 @@ final class ChatStore: ObservableObject {
         }
         let text = parts.joined(separator: "\n")
         if let index = messages.firstIndex(where: {
-            $0.kind == .briefing && Calendar.current.isDateInToday($0.createdAt)
+            $0.kind == .briefing && calendar.isDateInToday($0.createdAt)
         }) {
             messages[index].text = text
         } else {

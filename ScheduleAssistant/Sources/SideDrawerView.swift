@@ -8,8 +8,7 @@ struct SideDrawerView: View {
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject private var app = AppSettings.shared
-    @State private var morningStatus = ""
-    @State private var eveningStatus = ""
+    @State private var briefingError = ""
 
     var body: some View {
         NavigationStack {
@@ -18,20 +17,26 @@ struct SideDrawerView: View {
                 defaultSettingsSection
                 briefingSection
                 Section {
-                    NavigationLink("使用教程") { UsageGuideView() }
-                    Button("重新观看首次教学") {
+                    NavigationLink {
+                        UsageGuideView()
+                    } label: {
+                        drawerRow("使用说明", systemImage: "book.closed")
+                    }
+                    Button {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                             app.onboardingCompleted = false
                         }
+                    } label: {
+                        drawerButtonRow("使用导览", systemImage: "sparkles")
                     }
-                }
-                Section {
                     NavigationLink {
                         AppSettingsScreen()
                     } label: {
-                        Label("设置", systemImage: "gearshape")
+                        drawerRow("设置", systemImage: "gearshape")
                     }
+                } header: {
+                    Text("帮助与设置")
                 }
             }
             .orbitEdgeSwipeBack { dismiss() }
@@ -40,6 +45,12 @@ struct SideDrawerView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("完成") { dismiss() } }
             }
+            .onChange(of: app.morningBriefingEnabled) { _, _ in synchronizeBriefingNotifications() }
+            .onChange(of: app.eveningBriefingEnabled) { _, _ in synchronizeBriefingNotifications() }
+            .onChange(of: app.morningBriefingHour) { _, _ in synchronizeBriefingNotifications() }
+            .onChange(of: app.morningBriefingMinute) { _, _ in synchronizeBriefingNotifications() }
+            .onChange(of: app.eveningBriefingHour) { _, _ in synchronizeBriefingNotifications() }
+            .onChange(of: app.eveningBriefingMinute) { _, _ in synchronizeBriefingNotifications() }
         }
         .presentationDetents([.large])
     }
@@ -207,54 +218,107 @@ struct SideDrawerView: View {
     // MARK: - 每日简报
 
     private var briefingSection: some View {
-        Section {
-            Toggle("晨报", isOn: $app.morningBriefingEnabled)
-            if app.morningBriefingEnabled {
-                Text("起床后 \(app.morningBriefingOffsetMinutes) 分钟（\(timeText(app.morningBriefingTime))）推送到对话")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("设置晨报推送提醒") {
-                    Task { morningStatus = await enableMorningNotification() }
+        Group {
+            Section {
+                briefingTimeRow(title: "晨报", enabled: $app.morningBriefingEnabled, time: morningBriefingDate)
+                briefingTimeRow(title: "晚报", enabled: $app.eveningBriefingEnabled, time: eveningBriefingDate)
+                if !briefingError.isEmpty {
+                    Text(briefingError)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
                 }
-                if !morningStatus.isEmpty {
-                    Text(morningStatus).font(.footnote).foregroundStyle(.secondary)
-                }
+            } header: {
+                Text("每日播报")
+            } footer: {
+                Text("播报以对话卡片形式出现；系统通知只在设定时间提醒你打开 Orbit。")
             }
-            Toggle("晚报", isOn: $app.eveningBriefingEnabled)
-            if app.eveningBriefingEnabled {
-                Text("睡前 \(app.eveningBriefingOffsetMinutes) 分钟（\(timeText(app.eveningBriefingTime))）总结今天任务")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Button("设置晚报推送提醒") {
-                    Task { eveningStatus = await enableEveningNotification() }
-                }
-                if !eveningStatus.isEmpty {
-                    Text(eveningStatus).font(.footnote).foregroundStyle(.secondary)
-                }
+
+            Section("播报内容") {
+                Toggle("显示本地天气", isOn: $app.weatherBriefingEnabled)
+                Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
+                Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
             }
-            // 这三项是晨报/晚报共用偏好，不属于任一播报的折叠内容。
-            Toggle("显示本地天气", isOn: $app.weatherBriefingEnabled)
-            Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
-            Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
-        } header: {
-            Text("每日播报")
-        } footer: {
-            Text("播报以对话卡片形式出现在对话窗口；系统通知只负责到点提醒你打开 Orbit。")
         }
     }
 
-    private func timeText(_ time: (hour: Int, minute: Int)) -> String {
-        String(format: "%02d:%02d", time.hour, time.minute)
+    private func briefingTimeRow(title: String, enabled: Binding<Bool>, time: Binding<Date>) -> some View {
+        HStack {
+            Toggle(title, isOn: enabled)
+            Spacer()
+            DatePicker("", selection: time, displayedComponents: .hourAndMinute)
+                .labelsHidden()
+                .datePickerStyle(.compact)
+                .disabled(!enabled.wrappedValue)
+        }
     }
 
-    private func enableMorningNotification() async -> String {
-        let morning = app.morningBriefingTime
-        return await MorningBriefingScheduler.enable(hour: morning.hour, minute: morning.minute)
+    private var morningBriefingDate: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: app.morningBriefingHour,
+                                      minute: app.morningBriefingMinute,
+                                      second: 0,
+                                      of: Date()) ?? Date()
+            },
+            set: { date in
+                app.morningBriefingHour = Calendar.current.component(.hour, from: date)
+                app.morningBriefingMinute = Calendar.current.component(.minute, from: date)
+            }
+        )
     }
 
-    private func enableEveningNotification() async -> String {
-        let evening = app.eveningBriefingTime
-        return await EveningBriefingScheduler.enable(hour: evening.hour, minute: evening.minute)
+    private var eveningBriefingDate: Binding<Date> {
+        Binding(
+            get: {
+                Calendar.current.date(bySettingHour: app.eveningBriefingHour,
+                                      minute: app.eveningBriefingMinute,
+                                      second: 0,
+                                      of: Date()) ?? Date()
+            },
+            set: { date in
+                app.eveningBriefingHour = Calendar.current.component(.hour, from: date)
+                app.eveningBriefingMinute = Calendar.current.component(.minute, from: date)
+            }
+        )
+    }
+
+    private func synchronizeBriefingNotifications() {
+        Task {
+            if app.morningBriefingEnabled {
+                let time = app.morningBriefingTime
+                let result = await MorningBriefingScheduler.enable(hour: time.hour, minute: time.minute)
+                briefingError = result.hasPrefix("已设置") ? "" : result
+            } else {
+                MorningBriefingScheduler.disable()
+            }
+            if app.eveningBriefingEnabled {
+                let time = app.eveningBriefingTime
+                let result = await EveningBriefingScheduler.enable(hour: time.hour, minute: time.minute)
+                if !result.hasPrefix("已设置") { briefingError = result }
+            } else {
+                EveningBriefingScheduler.disable()
+            }
+        }
+    }
+
+    private func drawerRow(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 11) {
+            Image(systemName: systemImage)
+                .foregroundStyle(orbitAccent())
+                .frame(width: 20)
+            Text(title)
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private func drawerButtonRow(_ title: String, systemImage: String) -> some View {
+        HStack {
+            drawerRow(title, systemImage: systemImage)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.bold())
+                .foregroundStyle(.tertiary)
+        }
     }
 
 }

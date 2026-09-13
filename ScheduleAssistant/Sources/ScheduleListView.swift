@@ -63,6 +63,7 @@ struct NotificationBellButton: View {
         Button { isPresented = true } label: {
             Image(systemName: notifications.unreadCount == 0 ? "bell" : "bell.fill")
                 .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(orbitAccent())
                 .overlay(alignment: .topTrailing) {
                     if notifications.unreadCount > 0 {
                         Text("\(min(99, notifications.unreadCount))")
@@ -231,9 +232,8 @@ struct NotificationGroupListView: View {
 
     private func color(for kind: OrbitNotificationKind) -> Color {
         switch kind {
-        case .briefing: return orbitAccent()
+        case .briefing, .reminder: return orbitAccent()
         case .conflict, .writeFailure, .aiFailure: return .red
-        case .reminder: return .blue
         }
     }
 }
@@ -265,6 +265,9 @@ struct TodayScheduleView: View {
                         .padding(.top, 80)
                     } else {
                         LazyVStack(spacing: 0) {
+                            if shouldShowWakeAnchor {
+                                wakeAnchor
+                            }
                             ForEach(events, id: \.eventIdentifier) { event in
                                 SwipeActionCard(onDelete: {
                                     eventToDelete = event
@@ -277,7 +280,6 @@ struct TodayScheduleView: View {
                                     }
                                     .buttonStyle(.plain)
                                 }
-                                Divider().padding(.leading, 70)
                             }
                         }
                         .padding(.horizontal, 18)
@@ -342,13 +344,20 @@ struct TodayScheduleView: View {
     /// 日期严格居中，前一天/后一天按钮分列左右两侧。
     private var daySelector: some View {
         ZStack {
-            VStack(spacing: 2) {
-                Text(selectedDay.friendlyDay)
-                    .font(.title2.bold())
-                Text(selectedDay.formatted(.dateTime.year().month().day().weekday()))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Button {
+                selectedDay = Date()
+            } label: {
+                VStack(spacing: 3) {
+                    Text(dayHeaderTitle)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(Color(.label).opacity(0.82))
+                    Text(dayNumericTitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("回到今天")
 
             HStack {
                 dayShiftButton(systemImage: "chevron.left", delta: -1)
@@ -374,21 +383,98 @@ struct TodayScheduleView: View {
         selectedDay = Calendar.current.date(byAdding: .day, value: delta, to: selectedDay) ?? selectedDay
     }
 
-    private func timelineRow(_ event: EKEvent) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            Text(emoji(for: event.title ?? "")).font(.title2).frame(width: 38)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(event.isAllDay ? "全天" : "\(event.startDate.shortTime)–\(event.endDate.shortTime)")
+    private var dayHeaderTitle: String {
+        let calendar = Calendar.current
+        let weekday = selectedDay.formatted(.dateTime.weekday(.wide).locale(Locale(identifier: "zh_CN")))
+        if calendar.isDateInToday(selectedDay) { return "今天 · \(weekday)" }
+        if calendar.isDateInTomorrow(selectedDay) { return "明天 · \(weekday)" }
+        if calendar.isDateInYesterday(selectedDay) { return "昨天 · \(weekday)" }
+        return weekday
+    }
+
+    private var dayNumericTitle: String {
+        selectedDay.formatted(.dateTime.year().month(.twoDigits).day(.twoDigits).locale(Locale(identifier: "zh_CN")))
+    }
+
+    private var shouldShowWakeAnchor: Bool {
+        guard let firstTimed = events.first(where: { !$0.isAllDay }) else { return false }
+        let wake = Calendar.current.date(bySettingHour: AppSettings.shared.wakeHour,
+                                         minute: AppSettings.shared.wakeMinute,
+                                         second: 0,
+                                         of: selectedDay) ?? selectedDay
+        return firstTimed.startDate > wake
+    }
+
+    /// 若当天首项日程晚于起床时间，时间轴以起床作为可见起点；有更早日程时则直接从首项开始。
+    private var wakeAnchor: some View {
+        HStack(alignment: .top, spacing: 0) {
+            Text(String(format: "%02d:%02d", AppSettings.shared.wakeHour, AppSettings.shared.wakeMinute))
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 62, alignment: .trailing)
+            timelineAxisNode(isAnchor: true)
+            HStack(spacing: 8) {
+                Image(systemName: "sun.horizon")
+                    .foregroundStyle(orbitAccent().opacity(0.78))
+                Text("起床")
                     .font(.subheadline.weight(.medium))
-                Text(event.title ?? "未命名日程").font(.headline).lineLimit(2)
-                if let location = event.location, !location.isEmpty {
-                    Label(location, systemImage: "mappin.and.ellipse")
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 12)
+            .padding(.leading, 10)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func timelineRow(_ event: EKEvent) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            Text(event.isAllDay ? "全天" : event.startDate.shortTime)
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 62, alignment: .trailing)
+                .padding(.top, 17)
+            timelineAxisNode(isAnchor: false)
+            HStack(alignment: .top, spacing: 10) {
+                Rectangle()
+                    .fill(orbitAccent().opacity(0.34))
+                    .frame(width: 11, height: 1)
+                    .padding(.top, 23)
+                Text(emoji(for: event.title ?? ""))
+                    .font(.title3)
+                    .frame(width: 30, alignment: .leading)
+                    .padding(.top, 12)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(event.isAllDay ? "全天" : "\(event.startDate.shortTime)–\(event.endDate.shortTime)")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color(.label).opacity(0.82))
+                    Text(event.title ?? "未命名日程")
+                        .font(.headline)
+                        .lineLimit(2)
+                    if let location = event.location, !location.isEmpty {
+                        Label(location, systemImage: "mappin.and.ellipse")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.bottom, 14)
         }
-        .padding(.vertical, 18)
+    }
+
+    private func timelineAxisNode(isAnchor: Bool) -> some View {
+        ZStack(alignment: .top) {
+            Rectangle()
+                .fill(Color(.separator).opacity(0.40))
+                .frame(width: 1)
+            Circle()
+                .fill(isAnchor ? orbitAccent().opacity(0.45) : orbitAccent())
+                .frame(width: isAnchor ? 9 : 11, height: isAnchor ? 9 : 11)
+                .padding(.top, isAnchor ? 14 : 18)
+        }
+        .frame(width: 28)
+        .frame(maxHeight: .infinity)
     }
 
     private func refresh() async {

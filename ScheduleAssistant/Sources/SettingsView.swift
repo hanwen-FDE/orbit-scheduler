@@ -138,7 +138,7 @@ struct AppSettingsScreen: View {
                 HStack {
                     Label("关于 Orbit", systemImage: "info.circle")
                     Spacer()
-                    Text("官网建设中")
+                    Text("稍后上线")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }

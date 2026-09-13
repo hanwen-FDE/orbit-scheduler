@@ -344,14 +344,14 @@ struct EventCardView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Text("日历")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(orbitAccent().opacity(0.72))
                             Text(snapshot.calendarTitle)
                                 .fontWeight(.semibold)
-                                .foregroundStyle(orbitAccent())
+                                .foregroundStyle(orbitAccent().opacity(0.82))
                                 .lineLimit(1)
                             Image(systemName: "chevron.down")
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(orbitAccent().opacity(0.72))
                         }
                     }
                     .font(.subheadline)
@@ -544,7 +544,7 @@ struct EventCardView: View {
                 } label: {
                     Text("忽略")
                         .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(orbitAccent().opacity(0.72))
                 }
             }
         }
@@ -565,7 +565,7 @@ struct HabitCardView: View {
                 Text(habit.emoji)
                     .font(.system(size: 30))
                     .frame(width: 48, height: 48)
-                    .background(Circle().fill(Color.green.opacity(0.14)))
+                    .background(Circle().fill(orbitAccent().opacity(0.14)))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(habit.title).font(.headline)
                     Text("习惯提醒 · \(habit.recurrence.displayText)")
