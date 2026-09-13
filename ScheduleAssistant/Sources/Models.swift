@@ -38,11 +38,13 @@ enum OrbitThemePreset: String, CaseIterable, Identifiable {
 
 /// 左上角品牌标识：斜椭圆（随主题变色）+「Orbit 轨迹」。
 struct OrbitBrandMark: View {
+    @ObservedObject private var app = AppSettings.shared
+
     var body: some View {
         HStack(spacing: 7) {
             Ellipse()
                 .stroke(
-                    LinearGradient(colors: [orbitAccent(), orbitAccent().opacity(0.55)],
+                    LinearGradient(colors: [app.theme.accent, app.theme.accent.opacity(0.55)],
                                    startPoint: .top, endPoint: .bottom),
                     lineWidth: 2.2
                 )
@@ -50,8 +52,33 @@ struct OrbitBrandMark: View {
                 .rotationEffect(.degrees(-43))
             Text("Orbit 轨迹")
                 .font(.headline)
-                .foregroundStyle(.primary)
+                .foregroundStyle(app.theme.accent)
         }
+    }
+}
+
+/// 全局统一的左缘右滑返回。使用同时识别手势，避免阻断列表滚动、按钮点击和卡片手势。
+struct OrbitEdgeSwipeBackModifier: ViewModifier {
+    let onBack: () -> Void
+
+    func body(content: Content) -> some View {
+        content.simultaneousGesture(
+            DragGesture(minimumDistance: 24, coordinateSpace: .global)
+                .onEnded { value in
+                    let startsAtLeftEdge = value.startLocation.x <= 32
+                    let movesRight = value.translation.width > 80
+                    let isHorizontal = abs(value.translation.width) > abs(value.translation.height) * 1.2
+                    if startsAtLeftEdge, movesRight, isHorizontal {
+                        onBack()
+                    }
+                }
+        )
+    }
+}
+
+extension View {
+    func orbitEdgeSwipeBack(perform onBack: @escaping () -> Void) -> some View {
+        modifier(OrbitEdgeSwipeBackModifier(onBack: onBack))
     }
 }
 
@@ -140,6 +167,8 @@ struct EventSnapshot: Codable, Equatable {
     var notes: String?
     /// 提前提醒的分钟数；nil = 不提醒；0 = 准时
     var reminderMinutes: Int?
+    /// 从 Apple 日历读取的全部提醒偏移。nil 表示沿用 reminderMinutes；空数组表示无提醒。
+    var alarmOffsets: [TimeInterval]? = nil
     var calendarIdentifier: String
     var calendarTitle: String
     var eventIdentifier: String?
@@ -257,7 +286,17 @@ final class AppSettings: ObservableObject {
     private let kOnboarding = "orbit.onboardingCompleted"
 
     @Published var defaultCalendarId: String? {
-        didSet { UserDefaults.standard.set(defaultCalendarId, forKey: kCalendar) }
+        didSet {
+            UserDefaults.standard.set(defaultCalendarId, forKey: kCalendar)
+            // “默认日历”决定写入目标；“日历读取”决定展示与冲突范围。
+            // 显式筛选读取范围时，写入目标必须始终可见。
+            if let calendarId = defaultCalendarId,
+               var readableIds = visibleCalendarIds,
+               !readableIds.contains(calendarId) {
+                readableIds.append(calendarId)
+                visibleCalendarIds = readableIds
+            }
+        }
     }
     @Published var defaultReminderMinutes: Int {
         didSet { UserDefaults.standard.set(defaultReminderMinutes, forKey: kReminder) }
@@ -349,6 +388,12 @@ final class AppSettings: ObservableObject {
         eveningBriefingOffsetMinutes = UserDefaults.standard.object(forKey: kEveningOffset) as? Int ?? 30
         theme = OrbitThemePreset(rawValue: UserDefaults.standard.string(forKey: kTheme) ?? "") ?? .blue
         onboardingCompleted = UserDefaults.standard.bool(forKey: kOnboarding)
+        if let calendarId = defaultCalendarId,
+           var readableIds = visibleCalendarIds,
+           !readableIds.contains(calendarId) {
+            readableIds.append(calendarId)
+            visibleCalendarIds = readableIds
+        }
     }
 }
 

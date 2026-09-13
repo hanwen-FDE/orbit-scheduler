@@ -16,7 +16,6 @@ struct SideDrawerView: View {
             List {
                 themeSection
                 defaultSettingsSection
-                visibleCalendarsSection
                 briefingSection
                 Section {
                     NavigationLink("使用教程") { UsageGuideView() }
@@ -35,6 +34,7 @@ struct SideDrawerView: View {
                     }
                 }
             }
+            .orbitEdgeSwipeBack { dismiss() }
             .navigationTitle("Orbit")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -93,45 +93,85 @@ struct SideDrawerView: View {
             }
             DatePicker("通常起床", selection: wakeTime, displayedComponents: .hourAndMinute)
             DatePicker("通常睡觉", selection: sleepTime, displayedComponents: .hourAndMinute)
+            readCalendarsRow
         } header: {
             Text("默认设置")
         } footer: {
-            Text("作息决定早报与晚报的推送时间，也用于筛选合理的冲突重排建议；“读取哪些日历”控制 Orbit 展示与检查冲突的范围。")
+            Text("默认日历决定新日程写到哪里；日历读取决定“今天”、简报和冲突检查读取哪些日历。默认写入日历会始终包含在读取范围内。")
         }
     }
 
-    /// 读取哪些日历：空选 = 全部。
-    private var visibleCalendarsSection: some View {
-        Section {
-            let calendars = CalendarService.shared.readableCalendars()
+    /// 默认设置中的第 5 行：用一个下拉菜单完成多日历读取范围选择。
+    @ViewBuilder
+    private var readCalendarsRow: some View {
+        let calendars = CalendarService.shared.readableCalendars()
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        HStack {
+            Text("日历读取")
+            Spacer()
             if calendars.isEmpty {
-                Text("未读取到日历，请检查系统日历账户")
-                    .font(.footnote)
+                Text("未读取到日历")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(calendars, id: \.calendarIdentifier) { cal in
-                    Toggle(cal.title, isOn: Binding(
-                        get: {
-                            guard let visible = app.visibleCalendarIds else { return true }
-                            return visible.contains(cal.calendarIdentifier)
-                        },
-                        set: { on in
-                            var ids = Set(app.visibleCalendarIds ?? calendars.map { $0.calendarIdentifier })
-                            if on {
-                                ids.insert(cal.calendarIdentifier)
-                            } else {
-                                ids.remove(cal.calendarIdentifier)
-                            }
-                            app.visibleCalendarIds = ids.isEmpty ? nil : Array(ids)
+                Menu {
+                    Button {
+                        app.visibleCalendarIds = nil
+                    } label: {
+                        if app.visibleCalendarIds == nil {
+                            Label("全部日历", systemImage: "checkmark")
+                        } else {
+                            Text("全部日历")
                         }
-                    ))
+                    }
+                    Divider()
+                    ForEach(calendars, id: \.calendarIdentifier) { calendar in
+                        Button {
+                            toggleReadableCalendar(calendar.calendarIdentifier, calendars: calendars)
+                        } label: {
+                            if isCalendarReadable(calendar.calendarIdentifier) {
+                                Label(calendar.title, systemImage: "checkmark")
+                            } else {
+                                Text(calendar.title)
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(readCalendarSummary(calendars))
+                            .foregroundStyle(orbitAccent())
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
-        } header: {
-            Text("读取哪些日历")
-        } footer: {
-            Text("关闭的日历不会出现在“今天”列表、简报统计和冲突检查里；全部关闭等同全部开启。")
         }
+    }
+
+    private func isCalendarReadable(_ identifier: String) -> Bool {
+        app.visibleCalendarIds?.contains(identifier) ?? true
+    }
+
+    private func readCalendarSummary(_ calendars: [EKCalendar]) -> String {
+        guard let selected = app.visibleCalendarIds else { return "全部" }
+        let selectedCalendars = calendars.filter { selected.contains($0.calendarIdentifier) }
+        if selectedCalendars.count == 1 { return selectedCalendars[0].title }
+        return "\(selectedCalendars.count) 个日历"
+    }
+
+    private func toggleReadableCalendar(_ identifier: String, calendars: [EKCalendar]) {
+        let allIds = calendars.map(\.calendarIdentifier)
+        var selected = Set(app.visibleCalendarIds ?? allIds)
+        if selected.contains(identifier) {
+            // 默认写入日历必须参与读取；也至少保留一个读取日历。
+            guard identifier != app.defaultCalendarId, selected.count > 1 else { return }
+            selected.remove(identifier)
+        } else {
+            selected.insert(identifier)
+        }
+        let includesAll = Set(allIds).isSubset(of: selected)
+        app.visibleCalendarIds = includesAll ? nil : Array(selected).sorted()
     }
 
     private var wakeTime: Binding<Date> {
@@ -192,11 +232,10 @@ struct SideDrawerView: View {
                     Text(eveningStatus).font(.footnote).foregroundStyle(.secondary)
                 }
             }
-            if app.morningBriefingEnabled || app.eveningBriefingEnabled {
-                Toggle("显示本地天气", isOn: $app.weatherBriefingEnabled)
-                Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
-                Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
-            }
+            // 这三项是晨报/晚报共用偏好，不属于任一播报的折叠内容。
+            Toggle("显示本地天气", isOn: $app.weatherBriefingEnabled)
+            Toggle("显示冲突摘要", isOn: $app.morningBriefingShowsConflicts)
+            Toggle("周末发送", isOn: $app.morningBriefingOnWeekends)
         } header: {
             Text("每日播报")
         } footer: {

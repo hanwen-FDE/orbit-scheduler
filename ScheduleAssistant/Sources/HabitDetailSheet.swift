@@ -59,6 +59,7 @@ struct HabitDetailSheet: View {
                 }
             }
         }
+        .orbitEdgeSwipeBack { dismiss() }
     }
 
     private var recurrenceDescription: String {

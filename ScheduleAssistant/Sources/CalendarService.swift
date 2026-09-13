@@ -39,7 +39,10 @@ final class CalendarService {
     private var visibleFilter: [EKCalendar]? {
         guard let ids = UserDefaults.standard.stringArray(forKey: "orbit.visibleCalendarIds"),
               !ids.isEmpty else { return nil }
-        let set = Set(ids)
+        var set = Set(ids)
+        if let defaultId = UserDefaults.standard.string(forKey: "orbit.defaultCalendarId") {
+            set.insert(defaultId)
+        }
         let all = store.calendars(for: .event)
         let picked = all.filter { set.contains($0.calendarIdentifier) }
         return picked.isEmpty ? nil : picked
@@ -50,7 +53,7 @@ final class CalendarService {
     @discardableResult
     func createEvent(_ snapshot: EventSnapshot) -> String? {
         let event = EKEvent(eventStore: store)
-        apply(snapshot, to: event)
+        apply(snapshot, to: event, updateRecurrence: true)
         do {
             try store.save(event, span: .thisEvent)
             return event.eventIdentifier
@@ -59,14 +62,14 @@ final class CalendarService {
         }
     }
 
-    func updateEvent(_ snapshot: inout EventSnapshot) {
+    func updateEvent(_ snapshot: inout EventSnapshot, updateRecurrence: Bool = false) {
         guard let id = snapshot.eventIdentifier,
               let event = store.event(withIdentifier: id) else {
             // 原事件不存在（可能被用户在系统日历里删了），重新创建
             snapshot.eventIdentifier = createEvent(snapshot)
             return
         }
-        apply(snapshot, to: event)
+        apply(snapshot, to: event, updateRecurrence: updateRecurrence)
         // 对循环事件，编辑的是“这一项及后续”，避免只修改某一次后
         // 让卡片中的循环规则与系统日历中的规则脱节。
         let span: EKSpan = (snapshot.recurrence != nil || event.hasRecurrenceRules)
@@ -86,7 +89,7 @@ final class CalendarService {
               let event = store.event(withIdentifier: id) else { return }
         event.alarms = []
         if let minutes {
-            event.addAlarm(EKAlarm(relativeOffset: TimeInterval(-minutes)))
+            event.addAlarm(EKAlarm(relativeOffset: TimeInterval(-minutes * 60)))
         }
         let span: EKSpan = event.hasRecurrenceRules ? .futureEvents : .thisEvent
         try? store.save(event, span: span)
@@ -211,7 +214,7 @@ final class CalendarService {
         }
     }
 
-    private func apply(_ snapshot: EventSnapshot, to event: EKEvent) {
+    private func apply(_ snapshot: EventSnapshot, to event: EKEvent, updateRecurrence: Bool) {
         event.title = snapshot.title
         event.location = snapshot.location
         event.notes = snapshot.notes
@@ -220,11 +223,53 @@ final class CalendarService {
         event.endDate = snapshot.end
         event.calendar = store.calendar(withIdentifier: snapshot.calendarIdentifier)
             ?? store.defaultCalendarForNewEvents
-        event.alarms = []
-        if let minutes = snapshot.reminderMinutes {
-            event.addAlarm(EKAlarm(relativeOffset: TimeInterval(-minutes)))
+        // 导入 Apple 日历的事件会携带全部提醒；旧版 Orbit 快照没有该字段时，
+        // 编辑既有事件应保留系统中的提醒，而新建事件才使用默认提醒分钟数。
+        if let alarmOffsets = snapshot.alarmOffsets {
+            event.alarms = []
+            for offset in alarmOffsets {
+                event.addAlarm(EKAlarm(relativeOffset: offset))
+            }
+        } else if event.eventIdentifier == nil {
+            event.alarms = []
+            if let minutes = snapshot.reminderMinutes {
+                event.addAlarm(EKAlarm(relativeOffset: TimeInterval(-minutes * 60)))
+            }
         }
-        event.recurrenceRules = recurrenceRule(for: snapshot.recurrence).map { [$0] }
+        if updateRecurrence {
+            event.recurrenceRules = recurrenceRule(for: snapshot.recurrence).map { [$0] }
+        }
+    }
+
+    /// 将系统日历中常见的循环规则转换为 Orbit 卡片可编辑的规则。
+    func recurrenceSpec(for event: EKEvent) -> RecurrenceSpec? {
+        guard let rule = event.recurrenceRules?.first else { return nil }
+        let frequency: RecurrenceFrequency
+        switch rule.frequency {
+        case .daily:
+            frequency = .daily
+        case .weekly:
+            let selectedWeekdays = Set((rule.daysOfTheWeek ?? []).map { $0.dayOfTheWeek.rawValue })
+            let workdays = Set([
+                EKWeekday.monday.rawValue,
+                EKWeekday.tuesday.rawValue,
+                EKWeekday.wednesday.rawValue,
+                EKWeekday.thursday.rawValue,
+                EKWeekday.friday.rawValue
+            ])
+            frequency = selectedWeekdays == workdays ? .weekdays : .weekly
+        case .monthly:
+            frequency = .monthly
+        case .yearly:
+            frequency = .yearly
+        @unknown default:
+            return nil
+        }
+        return RecurrenceSpec(
+            frequency: frequency,
+            interval: max(1, rule.interval),
+            endDate: rule.recurrenceEnd?.endDate
+        )
     }
 
     /// EventKit 只支持 daily/weekly/monthly/yearly；“工作日”用每周一至周五表示。

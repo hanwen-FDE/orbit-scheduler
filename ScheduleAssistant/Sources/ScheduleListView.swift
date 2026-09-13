@@ -44,8 +44,8 @@ final class OrbitNotificationStore: ObservableObject {
         persist()
     }
 
-    func delete(at offsets: IndexSet) {
-        items.remove(atOffsets: offsets)
+    func delete(ids: Set<UUID>) {
+        items.removeAll { ids.contains($0.id) }
         persist()
     }
 
@@ -85,21 +85,22 @@ struct OrbitNotificationCenterView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if store.items.isEmpty {
-                    ContentUnavailableView("暂无通知", systemImage: "bell", description: Text("日程提醒、每日简报和失败信息会出现在这里。"))
-                } else {
-                    List {
-                        groupEntry(title: "通知",
-                                   items: store.items.filter { $0.kind != .briefing },
-                                   emptyHint: "暂无通知记录")
-                        groupEntry(title: "简报",
-                                   items: store.items.filter { $0.kind == .briefing },
-                                   emptyHint: "还没有简报")
-                    }
+            ScrollView {
+                VStack(spacing: 16) {
+                    groupEntry(title: "通知",
+                               showsBriefings: false,
+                               items: store.items.filter { $0.kind != .briefing },
+                               emptyHint: "暂无通知记录")
+                    groupEntry(title: "简报",
+                               showsBriefings: true,
+                               items: store.items.filter { $0.kind == .briefing },
+                               emptyHint: "还没有简报")
                 }
+                .padding(18)
             }
-            .navigationTitle("通知")
+            .orbitEdgeSwipeBack { dismiss() }
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("消息")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } }
@@ -111,14 +112,34 @@ struct OrbitNotificationCenterView: View {
     }
 
     /// 分组入口：大标题 + 最近一条预览；点进子页看该类全部记录。
-    private func groupEntry(title: String, items: [OrbitNotificationItem], emptyHint: String) -> some View {
+    private func groupEntry(
+        title: String,
+        showsBriefings: Bool,
+        items: [OrbitNotificationItem],
+        emptyHint: String
+    ) -> some View {
         NavigationLink {
-            NotificationGroupListView(title: title, items: items)
+            NotificationGroupListView(
+                title: title,
+                showsBriefings: showsBriefings,
+                onOpenMessage: { messageId in
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        chat.pendingFocusMessageId = messageId
+                    }
+                }
+            )
         } label: {
             VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
+                HStack {
+                    Text(title)
+                        .font(.title3.bold())
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(.tertiary)
+                }
                 if let latest = items.first {
                     Text(latest.detail)
                         .font(.subheadline)
@@ -141,19 +162,29 @@ struct OrbitNotificationCenterView: View {
                         .foregroundStyle(.tertiary)
                 }
             }
-            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(Color(.systemBackground))
+                    .shadow(color: .black.opacity(0.05), radius: 8, y: 3)
+            )
         }
+        .buttonStyle(.plain)
     }
 }
 
 /// 某一类的全部记录（按时间逆序，最新在前）。
 struct NotificationGroupListView: View {
     @ObservedObject private var store = OrbitNotificationStore.shared
-    @EnvironmentObject private var chat: ChatStore
-    @Environment(\.dismiss) private var dismiss
 
     let title: String
-    let items: [OrbitNotificationItem]
+    let showsBriefings: Bool
+    let onOpenMessage: (UUID) -> Void
+
+    private var items: [OrbitNotificationItem] {
+        store.items.filter { showsBriefings ? $0.kind == .briefing : $0.kind != .briefing }
+    }
 
     var body: some View {
         Group {
@@ -164,10 +195,8 @@ struct NotificationGroupListView: View {
                     ForEach(items) { item in
                         Button {
                             store.markRead(item.id)
-                            // 有关联日程卡片的通知：关闭通知中心并跳去那张卡片打开编辑。
                             if let messageId = item.relatedMessageId {
-                                chat.pendingFocusMessageId = messageId
-                                dismiss()
+                                onOpenMessage(messageId)
                             }
                         } label: {
                             HStack(alignment: .top, spacing: 12) {
@@ -187,7 +216,12 @@ struct NotificationGroupListView: View {
                         }
                         .buttonStyle(.plain)
                     }
-                    .onDelete(perform: store.delete)
+                    .onDelete { offsets in
+                        let ids = Set(offsets.compactMap { index in
+                            items.indices.contains(index) ? items[index].id : nil
+                        })
+                        store.delete(ids: ids)
+                    }
                 }
             }
         }
@@ -207,13 +241,13 @@ struct NotificationGroupListView: View {
 /// 两个主页面之一：直接读取 Apple 日历中的当天安排。
 struct TodayScheduleView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var chat: ChatStore
     var onOpenChat: () -> Void = {}
     @State private var breathe = false
     @State private var selectedDay = Date()
     @State private var events: [EKEvent] = []
     @State private var showNotifications = false
     @State private var showDrawer = false
-    @State private var eventToEdit: EKEvent?
     @State private var eventToDelete: EKEvent?
 
     var body: some View {
@@ -232,12 +266,16 @@ struct TodayScheduleView: View {
                     } else {
                         LazyVStack(spacing: 0) {
                             ForEach(events, id: \.eventIdentifier) { event in
-                                SwipeActionCard {
+                                SwipeActionCard(onDelete: {
                                     eventToDelete = event
-                                } onEdit: {
-                                    eventToEdit = event
-                                } content: {
-                                    timelineRow(event)
+                                }) {
+                                    Button {
+                                        openEventInChat(event)
+                                    } label: {
+                                        timelineRow(event)
+                                            .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
                                 }
                                 Divider().padding(.leading, 70)
                             }
@@ -259,9 +297,6 @@ struct TodayScheduleView: View {
                 }
             }
         }
-            .sheet(item: $eventToEdit) { event in EKEventEditor(event: event) {
-                Task { await refresh() }
-            } }
             .confirmationDialog("删除这个日程？", isPresented: Binding(
                 get: { eventToDelete != nil },
                 set: { if !$0 { eventToDelete = nil } }
@@ -304,31 +339,35 @@ struct TodayScheduleView: View {
         .onAppear { breathe = true }
     }
 
-    /// 页面顶部唯一的标题行：粗体日期 + 小字完整日期在左，前后翻天按钮在右。
+    /// 日期严格居中，前一天/后一天按钮分列左右两侧。
     private var daySelector: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(selectedDay.friendlyDay).font(.title2.bold())
+        ZStack {
+            VStack(spacing: 2) {
+                Text(selectedDay.friendlyDay)
+                    .font(.title2.bold())
                 Text(selectedDay.formatted(.dateTime.year().month().day().weekday()))
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
-            Spacer()
-            Button { shiftDay(-1) } label: {
-                Image(systemName: "chevron.left")
-                    .font(.headline)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
+
+            HStack {
+                dayShiftButton(systemImage: "chevron.left", delta: -1)
+                Spacer()
+                dayShiftButton(systemImage: "chevron.right", delta: 1)
             }
-            .buttonStyle(.plain)
-            Button { shiftDay(1) } label: {
-                Image(systemName: "chevron.right")
-                    .font(.headline)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color(.secondarySystemBackground)))
-            }
-            .buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
+    }
+
+    private func dayShiftButton(systemImage: String, delta: Int) -> some View {
+        Button { shiftDay(delta) } label: {
+            Image(systemName: systemImage)
+                .font(.headline)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(Color(.secondarySystemBackground)))
+        }
+        .buttonStyle(.plain)
     }
 
     private func shiftDay(_ delta: Int) {
@@ -357,7 +396,17 @@ struct TodayScheduleView: View {
         events = CalendarService.shared.events(on: selectedDay)
     }
 
+    private func openEventInChat(_ event: EKEvent) {
+        let messageId = chat.ensureEventCard(for: Self.snapshot(of: event))
+        chat.pendingFocusMessageId = messageId
+        onOpenChat()
+    }
+
     private func emoji(for title: String) -> String {
+        Self.eventEmoji(for: title)
+    }
+
+    private static func eventEmoji(for title: String) -> String {
         let value = title.lowercased()
         if value.contains("饭") || value.contains("餐") { return "🍽️" }
         if value.contains("会") { return "💬" }
@@ -373,16 +422,18 @@ extension TodayScheduleView {
     static func snapshot(of event: EKEvent) -> EventSnapshot {
         EventSnapshot(
             title: event.title ?? "未命名日程",
-            emoji: "📅",
+            emoji: eventEmoji(for: event.title ?? ""),
             start: event.startDate,
             end: event.endDate,
             isAllDay: event.isAllDay,
             location: event.location,
             notes: event.notes,
             reminderMinutes: event.alarms?.first.map { Int(-$0.relativeOffset / 60) },
+            alarmOffsets: event.alarms?.map(\.relativeOffset),
             calendarIdentifier: event.calendar.calendarIdentifier,
             calendarTitle: event.calendar.title,
-            eventIdentifier: event.eventIdentifier
+            eventIdentifier: event.eventIdentifier,
+            recurrence: CalendarService.shared.recurrenceSpec(for: event)
         )
     }
 }
@@ -432,6 +483,7 @@ struct EKEventEditor: View {
             }
         }
         .presentationDetents([.large])
+        .orbitEdgeSwipeBack { dismiss() }
     }
 
     private func save() {

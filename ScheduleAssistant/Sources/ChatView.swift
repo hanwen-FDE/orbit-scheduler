@@ -30,7 +30,7 @@ struct ChatView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ZStack(alignment: .bottom) {
                 messageList
                 inputBar
             }
@@ -56,7 +56,7 @@ struct ChatView: View {
                 }
             }
         }
-        .modifier(EdgeSwipeBack { onClose?() })
+        .orbitEdgeSwipeBack { onClose?() }
         .sheet(isPresented: $showDrawer) { SideDrawerView() }
         .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
         .sheet(isPresented: $showPlusPanel) { plusPanel }
@@ -68,14 +68,10 @@ struct ChatView: View {
         }
         .onAppear {
             refreshBriefingAndHandleShortcut()
+            openPendingFocusIfNeeded()
         }
-        .onChange(of: chat.pendingFocusMessageId) { _, messageId in
-            guard let messageId,
-                  let target = chat.messages.first(where: { $0.id == messageId }) else { return }
-            chat.pendingFocusMessageId = nil
-            if target.event != nil || target.habit != nil {
-                editingMessage = target
-            }
+        .onChange(of: chat.pendingFocusMessageId) { _, _ in
+            openPendingFocusIfNeeded()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -107,6 +103,7 @@ struct ChatView: View {
                         .id(Self.chatBottomAnchor)
                 }
                 .padding()
+                .padding(.bottom, 92)
             }
             .scrollDismissesKeyboard(.interactively)
             .onAppear {
@@ -163,8 +160,19 @@ struct ChatView: View {
                 .fill(.ultraThinMaterial)
                 .shadow(color: .black.opacity(0.10), radius: 10, y: 4)
         )
+        .overlay {
+            Capsule(style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [orbitAccent(), orbitAccent().opacity(0.28)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ),
+                    lineWidth: 1.2
+                )
+        }
         .padding(.horizontal, 10)
-        .padding(.bottom, 6)
+        .padding(.bottom, 8)
         .onChange(of: speech.isRecording) { old, new in
             if old && !new {
                 let transcript = speech.transcript.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -269,25 +277,6 @@ struct ChatView: View {
         .accessibilityLabel(inputMode == .voice ? "切换到键盘输入" : "切换到语音输入")
     }
 
-    /// 左缘右滑返回上一层（对话页全屏浮层用；NavigationStack 子页沿用系统手势）。
-    struct EdgeSwipeBack: ViewModifier {
-        let onBack: () -> Void
-
-        func body(content: Content) -> some View {
-            content
-                .gesture(
-                    DragGesture(minimumDistance: 24, coordinateSpace: .global)
-                        .onEnded { value in
-                            let fromLeftEdge = value.startLocation.x < 32
-                            let horizontal = abs(value.translation.width) > abs(value.translation.height)
-                            if fromLeftEdge, horizontal, value.translation.width > 80 {
-                                onBack()
-                            }
-                        }
-                )
-        }
-    }
-
     // MARK: - ＋ 面板
 
     private var plusPanel: some View {
@@ -358,6 +347,15 @@ struct ChatView: View {
         }
         chat.upsertEveningBriefingIfDue(from: briefing)
         handleShortcutRequest()
+    }
+
+    /// Today/消息页可能在 ChatView 出现前就已指定目标卡片，因此 onAppear 也要主动消费。
+    private func openPendingFocusIfNeeded() {
+        guard let messageId = chat.pendingFocusMessageId,
+              let target = chat.messages.first(where: { $0.id == messageId }) else { return }
+        chat.pendingFocusMessageId = nil
+        guard target.event != nil else { return }
+        editingMessage = target
     }
 
     private func handleShortcutRequest() {

@@ -147,6 +147,7 @@ struct EventDetailSheet: View {
             }
         }
         .presentationDetents([.large])
+        .orbitEdgeSwipeBack { dismiss() }
         .confirmationDialog("删除循环日程", isPresented: $showDeleteOptions, titleVisibility: .visible) {
             Button("只删除这一次", role: .destructive) {
                 chat.deleteEventMessage(messageId)
@@ -186,7 +187,11 @@ struct EventDetailSheet: View {
         } else {
             updated.recurrence = nil
         }
-        chat.applyEdit(messageId: messageId, snapshot: updated)
+        chat.applyEdit(
+            messageId: messageId,
+            snapshot: updated,
+            updateRecurrence: updated.recurrence != snapshot.recurrence
+        )
         dismiss()
     }
 

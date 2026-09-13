@@ -208,7 +208,10 @@ final class ChatStore: ObservableObject {
                 }
                 if snap.end <= snap.start { snap.end = snap.start.addingTimeInterval(3600) }
                 refreshConflictMetadata(for: &snap)
-                CalendarService.shared.updateEvent(&snap)
+                CalendarService.shared.updateEvent(
+                    &snap,
+                    updateRecurrence: snap.recurrence != original.recurrence
+                )
                 messages[targetIndex].event = snap
                 let timePart = snap.isAllDay ? "" : " \(snap.start.shortTime)"
                 messages[thinkingIndex].text = "已按你的要求更新《\(snap.title)》→ \(snap.start.cardDay)\(timePart)。"
@@ -395,12 +398,36 @@ final class ChatStore: ObservableObject {
         save()
     }
 
+    /// 从“今天”页打开系统日历事件：复用已有卡片，找不到时建立一张可编辑卡片。
+    @discardableResult
+    func ensureEventCard(for imported: EventSnapshot) -> UUID {
+        var snapshot = imported
+        refreshConflictMetadata(for: &snapshot)
+
+        if let identifier = imported.eventIdentifier,
+           let index = messages.firstIndex(where: { $0.event?.eventIdentifier == identifier }) {
+            if let existing = messages[index].event {
+                snapshot.emoji = existing.emoji
+                snapshot.nativeReminderIdentifier = existing.nativeReminderIdentifier
+            }
+            messages[index].event = snapshot
+            save()
+            return messages[index].id
+        }
+
+        let message = ChatMessage(role: .assistant, kind: .eventCard, event: snapshot)
+        messages.append(message)
+        save()
+        return message.id
+    }
+
     func toggleReminder(messageId: UUID, on: Bool) {
         guard let idx = messages.firstIndex(where: { $0.id == messageId }),
               var snap = messages[idx].event else { return }
         let minutes = on ? (snap.reminderMinutes ?? AppSettings.shared.defaultReminderMinutes) : nil
         CalendarService.shared.setReminder(snapshot: snap, minutes: minutes)
         snap.reminderMinutes = minutes
+        snap.alarmOffsets = minutes.map { [TimeInterval(-$0 * 60)] } ?? []
         messages[idx].event = snap
         save()
     }
@@ -410,6 +437,7 @@ final class ChatStore: ObservableObject {
               var snap = messages[idx].event else { return }
         CalendarService.shared.setReminder(snapshot: snap, minutes: minutes)
         snap.reminderMinutes = minutes
+        snap.alarmOffsets = [TimeInterval(-minutes * 60)]
         messages[idx].event = snap
         save()
     }
@@ -428,11 +456,11 @@ final class ChatStore: ObservableObject {
         save()
     }
 
-    func applyEdit(messageId: UUID, snapshot: EventSnapshot) {
+    func applyEdit(messageId: UUID, snapshot: EventSnapshot, updateRecurrence: Bool = false) {
         var snap = snapshot
         refreshConflictMetadata(for: &snap)
         if snap.eventIdentifier != nil {
-            CalendarService.shared.updateEvent(&snap)
+            CalendarService.shared.updateEvent(&snap, updateRecurrence: updateRecurrence)
         }
         updateMessage(messageId, event: snap)
         resyncNativeReminderIfNeeded(messageId: messageId, snapshot: snap)

@@ -25,9 +25,10 @@ struct UsageGuideView: View {
                 section("② 日程卡片", """
 说得清楚就直接写入 Apple 日历，无需再次确认：
 
-• 点卡片：修改标题、时间、地点或重复规则
+• 点日期：只修改日期；点时间：只修改开始/结束时间
+• 点“日历”：快速切换写入的日历；点提醒时长：快速修改提醒
+• 点卡片右上角三个点：打开完整编辑页，修改标题、地点或重复规则
 • 长按卡片后右滑：出现红色删除（二次确认后删除）
-• 长按卡片后左滑：出现详情编辑按钮
 • “同步提醒事项、移动日历”在详情编辑页底部
 • 🔔 第 3 行滑动开关：要不要提醒；点亮后可点橙色时长切换“提前 15 分钟 / 1 小时 / 1 天”等
 • 出现「时间重叠」提示时：Orbit 不会私自改动你的时间；可一键点“改为 XX:XX”采用建议，或进编辑页手动调整
@@ -120,9 +121,11 @@ struct OnboardingView: View {
                         )
                         .frame(width: 120, height: 60)
                         .rotationEffect(.degrees(-43))
-                        .padding(.top, 12)
-                    Text("所有计划，运行于时间轨道")
+                        .offset(y: -16)
+                        .padding(.bottom, 18)
+                    Text("所有计划，运行于时间轨道。")
                         .font(.largeTitle.bold())
+                        .multilineTextAlignment(.center)
                     Text("Every plan, on its orbit.")
                         .font(.title3)
                         .foregroundStyle(.secondary)
@@ -166,7 +169,7 @@ struct OnboardingView: View {
                     offsetPicker(title: "晨报 · 起床后",
                                  isSelected: app.morningBriefingEnabled,
                                  selection: $app.morningBriefingOffsetMinutes)
-                    offsetPicker(title: "晚报 · 睡前",
+                    offsetPicker(title: "晚报 · 睡觉前",
                                  isSelected: app.eveningBriefingEnabled,
                                  selection: $app.eveningBriefingOffsetMinutes)
                 }
@@ -229,7 +232,10 @@ struct OnboardingView: View {
             .padding()
         }
         .background(Color(.systemGroupedBackground))
-        .onAppear { calendarStatus = EKEventStore.authorizationStatus(for: .event) }
+        .onAppear {
+            calendarStatus = EKEventStore.authorizationStatus(for: .event)
+            selectDefaultCalendarIfNeeded()
+        }
     }
 
     // MARK: - 组件
@@ -307,9 +313,26 @@ struct OnboardingView: View {
     private var calendarStatusRow: some View {
         switch calendarStatus {
         case .fullAccess, .writeOnly:
-            Label("已连接 Apple 日历", systemImage: "checkmark.circle.fill")
-                .font(.headline)
-                .foregroundStyle(.green)
+            let calendars = CalendarService.shared.availableCalendars()
+            VStack(spacing: 14) {
+                Label("已连接 Apple 日历", systemImage: "checkmark.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.green)
+                if !calendars.isEmpty {
+                    Picker("默认写入日历", selection: $app.defaultCalendarId) {
+                        ForEach(calendars, id: \.calendarIdentifier) { calendar in
+                            Text(calendar.title).tag(Optional(calendar.calendarIdentifier))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 14).fill(Color(.systemBackground)))
+                    Text("新日程默认写入这里，之后可在卡片上随时切换。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         case .denied, .restricted:
             VStack(spacing: 10) {
                 Label("日历权限未开启", systemImage: "exclamationmark.circle")
@@ -331,6 +354,7 @@ struct OnboardingView: View {
                 Task {
                     _ = await CalendarService.shared.ensureAccess()
                     calendarStatus = EKEventStore.authorizationStatus(for: .event)
+                    selectDefaultCalendarIfNeeded()
                 }
             } label: {
                 Label("允许访问日历", systemImage: "calendar.badge.plus")
@@ -340,6 +364,14 @@ struct OnboardingView: View {
             .tint(orbitAccent())
         @unknown default:
             EmptyView()
+        }
+    }
+
+    private func selectDefaultCalendarIfNeeded() {
+        let calendars = CalendarService.shared.availableCalendars()
+        guard !calendars.isEmpty else { return }
+        if !calendars.contains(where: { $0.calendarIdentifier == app.defaultCalendarId }) {
+            app.defaultCalendarId = calendars[0].calendarIdentifier
         }
     }
 

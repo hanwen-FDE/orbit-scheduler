@@ -1,17 +1,26 @@
 import SwiftUI
 import UIKit
 
-/// 通用滑动手势容器：长按激活后，右滑露出红色删除、左滑露出主题色详情编辑。
-/// 对话卡片与“今天”列表行共用，保证交互一致。
+/// 通用滑动手势容器：长按激活后右滑露出删除；需要时才提供左滑操作。
 struct SwipeActionCard<Content: View>: View {
-    var onDelete: () -> Void
-    var onEdit: () -> Void
-    @ViewBuilder var content: () -> Content
+    let onDelete: () -> Void
+    let onEdit: (() -> Void)?
+    let content: () -> Content
 
     @State private var armed = false
     @State private var offsetX: CGFloat = 0
 
     private let revealThreshold: CGFloat = 56
+
+    init(
+        onDelete: @escaping () -> Void,
+        onEdit: (() -> Void)? = nil,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.onDelete = onDelete
+        self.onEdit = onEdit
+        self.content = content
+    }
 
     var body: some View {
         ZStack {
@@ -22,11 +31,13 @@ struct SwipeActionCard<Content: View>: View {
                 }
                 .frame(width: 72)
                 Spacer(minLength: 0)
-                actionButton(color: orbitAccent(), icon: "pencil", visible: offsetX < -20) {
-                    reset()
-                    onEdit()
+                if let onEdit {
+                    actionButton(color: orbitAccent(), icon: "pencil", visible: offsetX < -20) {
+                        reset()
+                        onEdit()
+                    }
+                    .frame(width: 72)
                 }
-                .frame(width: 72)
             }
             content()
                 .scaleEffect(armed ? 0.985 : 1)
@@ -49,14 +60,15 @@ struct SwipeActionCard<Content: View>: View {
             .onChanged { value in
                 guard abs(value.translation.width) > abs(value.translation.height) else { return }
                 withAnimation(.easeOut(duration: 0.1)) {
-                    offsetX = min(120, max(-120, value.translation.width))
+                    let minimumOffset: CGFloat = onEdit == nil ? 0 : -120
+                    offsetX = min(120, max(minimumOffset, value.translation.width))
                 }
             }
             .onEnded { value in
                 withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
                     if value.translation.width > revealThreshold {
                         offsetX = 80
-                    } else if value.translation.width < -revealThreshold {
+                    } else if onEdit != nil, value.translation.width < -revealThreshold {
                         offsetX = -80
                     } else {
                         offsetX = 0
@@ -202,27 +214,23 @@ struct MessageRow: View {
     }
 }
 
-/// 日程卡片：固定三行（标题 / 时间 / 提醒），其余操作收进「…」菜单。
+/// 日程卡片：日期、时间、日历和提醒均就地修改；只有右上角「…」进入完整编辑页。
 struct EventCardView: View {
     @EnvironmentObject private var chat: ChatStore
-    @ObservedObject private var app = AppSettings.shared
     let messageId: UUID
     let snapshot: EventSnapshot
     var onTap: () -> Void
 
     @State private var showDeleteConfirmation = false
     @State private var showRecurringDeleteOptions = false
+    @State private var showDatePicker = false
+    @State private var showTimePicker = false
+    @State private var draftDate = Date()
+    @State private var draftStart = Date()
+    @State private var draftEnd = Date()
 
     var body: some View {
-        SwipeActionCard {
-            if snapshot.recurrence != nil {
-                showRecurringDeleteOptions = true
-            } else {
-                showDeleteConfirmation = true
-            }
-        } onEdit: {
-            onTap()
-        } content: {
+        SwipeActionCard(onDelete: requestDelete) {
             cardContent
         }
         .confirmationDialog("删除这个日程？", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
@@ -248,49 +256,70 @@ struct EventCardView: View {
 
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // 第 1 行：图标 + 标题（点击编辑）
+            // 第 1 行：图标 + 标题；只有右上角三个点进入完整编辑。
             HStack(alignment: .center, spacing: 10) {
-                Button(action: onTap) {
-                    HStack(alignment: .center, spacing: 10) {
-                        Text(snapshot.emoji)
-                            .font(.title3)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(snapshot.title)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                            if let recurrence = snapshot.recurrence {
-                                Text(recurrence.displayText)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer(minLength: 0)
+                Text(snapshot.emoji)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(snapshot.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if let recurrence = snapshot.recurrence {
+                        Text(recurrence.displayText)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                    .contentShape(Rectangle())
+                }
+                Spacer(minLength: 0)
+                if !snapshot.deleted {
+                    Button(action: onTap) {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("完整编辑日程")
+                }
+            }
+
+            // 第 2 行：日期和时间分别弹出自己的轻量编辑器。
+            HStack(spacing: 8) {
+                Button {
+                    draftDate = snapshot.start
+                    showDatePicker = true
+                } label: {
+                    Text(snapshot.start.cardDay)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(orbitAccent())
                 }
                 .buttonStyle(.plain)
                 .disabled(snapshot.deleted)
+                .popover(isPresented: $showDatePicker, arrowEdge: .top) {
+                    dateEditor
+                        .presentationCompactAdaptation(.popover)
+                }
 
+                Spacer(minLength: 0)
 
-            }
-
-            // 第 2 行：左“日期 周几”、右“起–止”（24 小时制），整行主题色
-            Button(action: onTap) {
-                HStack(spacing: 8) {
-                    Text(snapshot.start.cardDay)
-                        .font(.subheadline.weight(.medium))
-                    Spacer(minLength: 0)
+                Button {
+                    draftStart = snapshot.start
+                    draftEnd = snapshot.end
+                    showTimePicker = true
+                } label: {
                     Text(timeRangeText)
                         .font(.subheadline.weight(.medium))
+                        .foregroundStyle(orbitAccent())
                 }
-                .foregroundStyle(orbitAccent())
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .disabled(snapshot.deleted)
+                .popover(isPresented: $showTimePicker, arrowEdge: .top) {
+                    timeEditor
+                        .presentationCompactAdaptation(.popover)
+                }
             }
-            .buttonStyle(.plain)
-            .disabled(snapshot.deleted)
 
-            // 第 3 行：提醒（灰色“提前” + 橙色时长 + 开关）
             if snapshot.deleted {
                 Label("这个日程已从系统日历中删除", systemImage: "trash")
                     .font(.subheadline)
@@ -298,9 +327,76 @@ struct EventCardView: View {
             } else {
                 Divider()
                 conflictRow
+                // 第 3 行：左侧目标日历，右侧提醒时间和开关。
+                HStack(spacing: 8) {
+                    Menu {
+                        ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { calendar in
+                            Button {
+                                chat.changeCalendar(messageId: messageId, to: calendar.calendarIdentifier)
+                            } label: {
+                                if calendar.calendarIdentifier == snapshot.calendarIdentifier {
+                                    Label(calendar.title, systemImage: "checkmark")
+                                } else {
+                                    Text(calendar.title)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("日历")
+                                .foregroundStyle(.secondary)
+                            Text(snapshot.calendarTitle)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(orbitAccent())
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.subheadline)
+
+                    Spacer(minLength: 4)
+
+                    Text("提前")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if snapshot.reminderMinutes != nil {
+                        Menu {
+                            ForEach(ReminderOption.allCases) { option in
+                                Button {
+                                    chat.changeReminderDuration(
+                                        messageId: messageId,
+                                        minutes: option.minutes ?? 0)
+                                } label: {
+                                    if option.minutes == snapshot.reminderMinutes {
+                                        Label(option.label, systemImage: "checkmark")
+                                    } else {
+                                        Text(option.label)
+                                    }
+                                }
+                            }
+                        } label: {
+                            Text(reminderValueLabel)
+                                .font(.subheadline.bold())
+                                .foregroundStyle(orbitAccent())
+                        }
+                    } else {
+                        Text("关闭")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Toggle("", isOn: Binding(
+                        get: { snapshot.reminderMinutes != nil },
+                        set: { chat.toggleReminder(messageId: messageId, on: $0) }
+                    ))
+                    .labelsHidden()
+                    .tint(orbitAccent())
+                }
+
                 if snapshot.isPendingConfirmation {
                     HStack(spacing: 10) {
-                        Text("未写入日历")
+                        Text("尚未写入系统日历")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -312,51 +408,6 @@ struct EventCardView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(orbitAccent())
-                        Button("编辑", action: onTap)
-                            .buttonStyle(.bordered)
-                            .font(.subheadline)
-                    }
-                } else {
-                    HStack(spacing: 8) {
-                        Text("提醒")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        if snapshot.reminderMinutes != nil {
-                            // “提前”是普通灰字，放在 Menu 外面，避免被菜单 tint 染成主题色。
-                            Text("提前")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            Menu {
-                                ForEach(ReminderOption.allCases) { option in
-                                    Button {
-                                        chat.changeReminderDuration(
-                                            messageId: messageId,
-                                            minutes: option.minutes ?? 0)
-                                    } label: {
-                                        if option.minutes == snapshot.reminderMinutes {
-                                            Label(option.label, systemImage: "checkmark")
-                                        } else {
-                                            Text(option.label)
-                                        }
-                                    }
-                                }
-                            } label: {
-                                Text(reminderValueLabel)
-                                    .font(.subheadline.bold())
-                                    .foregroundStyle(orbitAccent())
-                            }
-                        } else {
-                            Text("已关闭")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Toggle("", isOn: Binding(
-                            get: { snapshot.reminderMinutes != nil },
-                            set: { chat.toggleReminder(messageId: messageId, on: $0) }
-                        ))
-                        .labelsHidden()
-                        .tint(orbitAccent())
                     }
                 }
             }
@@ -364,6 +415,89 @@ struct EventCardView: View {
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Color(.systemBackground)))
         .shadow(color: .black.opacity(0.06), radius: 8, y: 3)
+    }
+
+    private var dateEditor: some View {
+        VStack(spacing: 12) {
+            Text("修改日期")
+                .font(.headline)
+            DatePicker("", selection: $draftDate, displayedComponents: .date)
+                .datePickerStyle(.graphical)
+                .labelsHidden()
+            HStack {
+                Button("取消") { showDatePicker = false }
+                Spacer()
+                Button("完成") { applyDateChange() }
+                    .fontWeight(.semibold)
+            }
+        }
+        .padding(16)
+        .frame(width: 320)
+    }
+
+    @ViewBuilder
+    private var timeEditor: some View {
+        VStack(spacing: 14) {
+            Text("修改时间")
+                .font(.headline)
+            if snapshot.isAllDay {
+                Text("这是全天日程；如需改为具体时间，请点卡片右上角三个点。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            } else {
+                DatePicker("开始", selection: $draftStart, displayedComponents: .hourAndMinute)
+                DatePicker("结束", selection: $draftEnd, displayedComponents: .hourAndMinute)
+                HStack {
+                    Button("取消") { showTimePicker = false }
+                    Spacer()
+                    Button("完成") { applyTimeChange() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+        .padding(18)
+        .frame(width: 290)
+    }
+
+    private func requestDelete() {
+        if snapshot.recurrence != nil {
+            showRecurringDeleteOptions = true
+        } else {
+            showDeleteConfirmation = true
+        }
+    }
+
+    private func applyDateChange() {
+        var updated = snapshot
+        let calendar = Calendar.current
+        let duration = max(60, snapshot.end.timeIntervalSince(snapshot.start))
+        var day = calendar.dateComponents([.year, .month, .day], from: draftDate)
+        if snapshot.isAllDay {
+            updated.start = calendar.date(from: day).map { calendar.startOfDay(for: $0) } ?? draftDate
+            updated.end = calendar.date(byAdding: .day, value: 1, to: updated.start) ?? updated.start
+        } else {
+            let time = calendar.dateComponents([.hour, .minute, .second], from: snapshot.start)
+            day.hour = time.hour
+            day.minute = time.minute
+            day.second = time.second
+            updated.start = calendar.date(from: day) ?? draftDate
+            updated.end = updated.start.addingTimeInterval(duration)
+        }
+        chat.applyEdit(messageId: messageId, snapshot: updated)
+        showDatePicker = false
+    }
+
+    private func applyTimeChange() {
+        guard !snapshot.isAllDay else {
+            showTimePicker = false
+            return
+        }
+        var updated = snapshot
+        updated.start = draftStart
+        updated.end = draftEnd > draftStart ? draftEnd : draftStart.addingTimeInterval(3600)
+        chat.applyEdit(messageId: messageId, snapshot: updated)
+        showTimePicker = false
     }
 
     /// 第 2 行右侧的时间段；日期在左侧单独显示。
