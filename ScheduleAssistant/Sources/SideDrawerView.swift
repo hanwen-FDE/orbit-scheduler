@@ -116,7 +116,7 @@ struct SideDrawerView: View {
                             return visible.contains(cal.calendarIdentifier)
                         },
                         set: { on in
-                            var ids = Set(app.visibleCalendarIds ?? calendars.map(\.$0.calendarIdentifier))
+                            var ids = Set(app.visibleCalendarIds ?? calendars.map { $0.calendarIdentifier })
                             if on {
                                 ids.insert(cal.calendarIdentifier)
                             } else {

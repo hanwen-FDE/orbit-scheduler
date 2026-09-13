@@ -90,10 +90,10 @@ struct SwipeActionCard<Content: View>: View {
 
 /// 单条消息：气泡或日程卡片
 struct MessageRow: View {
-    var onOpenToday: (() -> Void)? = nil
     @EnvironmentObject private var chat: ChatStore
     let message: ChatMessage
     var onTapCard: () -> Void
+    var onOpenToday: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .bottom) {

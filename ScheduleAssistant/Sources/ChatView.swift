@@ -273,8 +273,8 @@ struct ChatView: View {
     struct EdgeSwipeBack: ViewModifier {
         let onBack: () -> Void
 
-        func body(body: Content) -> some View {
-            body
+        func body(content: Content) -> some View {
+            content
                 .gesture(
                     DragGesture(minimumDistance: 24, coordinateSpace: .global)
                         .onEnded { value in
