@@ -1,0 +1,67 @@
+name: Issue Fixed Distribution Cert
+
+# 一次性任务：用仓库里可用的 ASC API Key 为本地生成的 CSR 签发固定的
+# Apple Distribution 证书，回传 .cer（公开材料），并撤销 CI 云签名产生的
+# 已无私钥的旧分发证书。私钥始终只在开发者本机，不进入 CI/仓库。
+on:
+  workflow_dispatch:
+
+jobs:
+  issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 安装依赖
+        run: python3 -m pip install --quiet pyjwt cryptography requests
+
+      - name: 签发证书并清理死证书
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          CSR_B64: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURSBSRVFVRVNULS0tLS0KTUlJQ1pUQ0NBVTBDQVFBd0lERWVNQndHQTFVRUF3d1ZUM0ppYVhRZ1Ewa2dSR2x6ZEhKcFluVjBhVzl1TUlJQgpJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0NBUUVBeGgrREpNRnFWTmNHc0NNQTRYTFRod1A3Cm0zUjNrZGNiSS9jaGNjR2RlK2UyOUZpbTRtSW9Ya2dxcXAybWkwNktaK0NMV3NseEtDQ0wyc2FvYkt4UXE1OUYKcVY1REJINzZyZnZmeUdPQTk5NEU2Wkd5MW5EVnU5alh0MGx2YXJzM3NpQUJJaXpaV21rQVNaZ2tDN3NvY29lMwphYlVxZyttRWw3b1VDcWpCME96Z05EbGxOUExueDh4UmtvRHErWG1xNWlkTExXN2hzK3pOVGw3ZmRoSmhZYkVOCmx6REtmNU1IeEY4VG52eDJ1emY4YXBnOXNCaVRFQ0hpOVFjQ0tBMXFGTTd0SlFHZGtIVUd3MVBNYitnR0NCMloKeWZUcU91aFNzd2RZNXRjL2NvR0lIMVRzeXdsYzEweHJtMmVQMDdudFRsRENocFJVdVBxVnZyMDQwbTY4SVFJRApBUUFCb0FBd0RRWUpLb1pJaHZjTkFRRUxCUUFEZ2dFQkFMRDNlZHY5ZXlWKzRvZWlIRWlhTlM2WVV3NDZDOFZ5Ck1sTTljZXNhVVNhK1dQaTdXVFVOYXgyL3NjM3NuS2pIbmFWWGJnck02MGF5UTZOMG1oMDUxY2FEYWxMdFF2K0IKVGV5SGlaSmtDK3NrRjUzS3R3ai9ZZ3E0TWp6cnEvc0dFejYraTRtZ3RZZUJxZFBZU25VVXA3d3pHOEFRTC85VQpySkxsL3UvWlh0Z1RJZjRkbUlUUUtCMEp5YTVvcFJSV0FVOXU0eVRxTWovSHRrUTBic0hpQndXTEdldTZMbG1WClIzaVRTWUMyZHhnNi83OURicFZRSzUySG5iRDdGU0FWVlhNWndKVjJrSDFPOTFFMmhjcXZLWDRDeHRucGJoZWwKeDRPTlhkUVFMd0FNVFcyck52Z09nbHpabllwSUUzWjR5Y3RTR3ZXbU9WWHJKclo4RnM5YmpXUT0KLS0tLS1FTkQgQ0VSVElGSUNBVEUgUkVRVUVTVC0tLS0tCg==
+        run: |
+          python3 - <<'PY'
+          import os, base64, datetime, requests, jwt
+          API = "https://api.appstoreconnect.apple.com"
+          csr = base64.b64decode(os.environ["CSR_B64"]).decode()
+          p8 = base64.b64decode(os.environ["ASC_KEY_P8"])
+          now = datetime.datetime.now(datetime.timezone.utc)
+          tok = jwt.encode({"iss": os.environ["ASC_ISSUER_ID"], "iat": now,
+                            "exp": now + datetime.timedelta(minutes=15)},
+                           p8, algorithm="ES256",
+                           headers={"kid": os.environ["ASC_KEY_ID"]})
+          s = requests.Session()
+          s.headers.update({"Authorization": "Bearer " + tok,
+                            "Content-Type": "application/json"})
+          r = s.get(API + "/v1/certificates?limit=100")
+          r.raise_for_status()
+          before = r.json()["data"]
+          for c in before:
+              a = c["attributes"]
+              print("existing:", c["id"], a["certificateType"],
+                    a.get("displayName"), a.get("expirationDate", "")[:10])
+          r = s.post(API + "/v1/certificates", json={
+              "data": {"type": "certificates",
+                       "attributes": {"csrContent": csr,
+                                      "certificateType": "APPLE_DISTRIBUTION"}}})
+          print("create status:", r.status_code)
+          r.raise_for_status()
+          new = r.json()["data"]
+          open("dist.cer", "wb").write(
+              base64.b64decode(new["attributes"]["certificateContent"]))
+          print("issued:", new["id"], "serial",
+                new["attributes"]["serialNumber"], "expires",
+                new["attributes"]["expirationDate"][:10])
+          for c in before:
+              if c["id"] != new["id"] and c["attributes"]["certificateType"] in (
+                      "APPLE_DISTRIBUTION", "IOS_DISTRIBUTION"):
+                  d = s.delete(API + "/v1/certificates/" + c["id"])
+                  print("revoked dead cert:", c["id"],
+                        c["attributes"]["certificateType"], "->", d.status_code)
+          PY
+
+      - name: 上传证书文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-cert
+          path: dist.cer
