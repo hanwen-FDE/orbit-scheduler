@@ -122,7 +122,6 @@ struct OnboardingView: View {
                     Text("所有计划，运行于时间轨道。")
                         .font(.title3)
                         .foregroundStyle(.secondary)
-                        .italic()
                     VStack(alignment: .leading, spacing: 10) {
                         pain("安排散落在聊天、备忘录和脑子里，总是漏")
                         pain("手动一个个建日程，又慢又麻烦")

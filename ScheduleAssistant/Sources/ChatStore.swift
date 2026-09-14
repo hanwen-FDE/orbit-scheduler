@@ -711,7 +711,7 @@ final class ChatStore: ObservableObject {
         let weekday = calendar.component(.weekday, from: date)
         if !AppSettings.shared.morningBriefingOnWeekends && (weekday == 1 || weekday == 7) { return }
         let index: Int
-        if let existing = messages.firstIndex({
+        if let existing = messages.firstIndex(where: {
             $0.kind == .briefing && calendar.isDate($0.createdAt, inSameDayAs: date)
         }) {
             messages[existing].text = text
