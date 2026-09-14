@@ -61,10 +61,14 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSCalendarsUsageDescription</key>
+	<string>用于选择目标日历并写入识别出的日程</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>用于选择目标日历并写入识别出的日程</string>
 	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
 	<string>用于将识别出的日程写入日历</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>用于把循环习惯和选定日程同步到系统提醒事项</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>用于把循环习惯和选定日程同步到系统提醒事项</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
