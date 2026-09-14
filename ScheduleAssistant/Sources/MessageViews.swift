@@ -453,7 +453,7 @@ struct EventCardView: View {
                 Button("取消") { showDatePicker = false }
                 Spacer()
                 Button("完成") { applyDateChange() }
-                    .bold()
+                    .font(.headline)
             }
         }
         .padding(16)
@@ -477,7 +477,7 @@ struct EventCardView: View {
                     Button("取消") { showTimePicker = false }
                     Spacer()
                     Button("完成") { applyTimeChange() }
-                        .bold()
+                        .font(.headline)
                 }
             }
         }
