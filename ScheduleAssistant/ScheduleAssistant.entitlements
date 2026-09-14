@@ -12,7 +12,7 @@
 	<true/>
 	<key>com.apple.developer.ubiquity-container-identifiers</key>
 	<array>
-		<string>$(TeamIdentifierPrefix)com.itransstudio.orbit</string>
+		<string>iCloud.com.itransstudio.orbit</string>
 	</array>
 </dict>
 </plist>
