@@ -71,6 +71,7 @@ final class OrbitNotificationStore: ObservableObject {
 
 struct NotificationBellButton: View {
     @ObservedObject private var notifications = OrbitNotificationStore.shared
+    @ObservedObject private var app = AppSettings.shared
     @Binding var isPresented: Bool
 
     var body: some View {
@@ -548,7 +549,7 @@ extension TodayScheduleView {
             reminderMinutes: event.alarms?.first.map { Int(-$0.relativeOffset / 60) },
             alarmOffsets: event.alarms?.map(\.relativeOffset),
             calendarIdentifier: event.calendar.calendarIdentifier,
-            calendarTitle: event.calendar.title,
+            calendarTitle: CalendarService.shared.calendarDisplayName(event.calendar),
             eventIdentifier: event.eventIdentifier,
             recurrence: CalendarService.shared.recurrenceSpec(for: event)
         )

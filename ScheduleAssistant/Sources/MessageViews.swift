@@ -360,9 +360,9 @@ struct EventCardView: View {
                                 chat.changeCalendar(messageId: messageId, to: calendar.calendarIdentifier)
                             } label: {
                                 if calendar.calendarIdentifier == snapshot.calendarIdentifier {
-                                    Label(calendar.title, systemImage: "checkmark")
+                                    Label(CalendarService.shared.calendarDisplayName(calendar), systemImage: "checkmark")
                                 } else {
-                                    Text(calendar.title)
+                                    Text(CalendarService.shared.calendarDisplayName(calendar))
                                 }
                             }
                         }

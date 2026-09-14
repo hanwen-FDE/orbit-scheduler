@@ -100,6 +100,7 @@ struct OnboardingView: View {
                 OrbitBrandMark()
                 Spacer()
                 Button("跳过") { onComplete() }
+                    .foregroundStyle(orbitAccent())
             }
             .padding()
 
@@ -298,7 +299,7 @@ struct OnboardingView: View {
                 if !calendars.isEmpty {
                     Picker("默认写入日历", selection: $app.defaultCalendarId) {
                         ForEach(calendars, id: \.calendarIdentifier) { calendar in
-                            Text(calendar.title).tag(Optional(calendar.calendarIdentifier))
+                            Text(CalendarService.shared.calendarDisplayName(calendar)).tag(Optional(calendar.calendarIdentifier))
                         }
                     }
                     .pickerStyle(.menu)

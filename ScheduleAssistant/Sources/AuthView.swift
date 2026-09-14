@@ -1,4 +1,5 @@
 import SwiftUI
+import AuthenticationServices
 
 /// 登录 / 注册页：首次启动或令牌失效时全屏展示。
 /// 用户名 3~32 位字母数字下划线；密码 8~64 位。token 只进 Keychain。
@@ -59,6 +60,23 @@ struct AuthView: View {
                 .tint(orbitAccent())
                 .controlSize(.large)
                 .disabled(isBusy || username.isEmpty || password.isEmpty)
+
+                HStack(spacing: 10) {
+                    Rectangle().fill(Color.secondary.opacity(0.25)).frame(height: 1)
+                    Text("或")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Rectangle().fill(Color.secondary.opacity(0.25)).frame(height: 1)
+                }
+
+                SignInWithAppleButton(.continue) { request in
+                    request.requestedScopes = [.fullName, .email]
+                } onCompletion: { result in
+                    handleAppleSignIn(result)
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 48)
+                .disabled(isBusy)
 
                 if let errorMessage {
                     Text(errorMessage)
@@ -128,12 +146,42 @@ struct AuthView: View {
         }
     }
 
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        guard case .success(let authorization) = result,
+              let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+              let tokenData = credential.identityToken,
+              let identityToken = String(data: tokenData, encoding: .utf8) else {
+            if case .failure(let error) = result,
+               (error as? ASAuthorizationError)?.code != .canceled {
+                errorMessage = "Apple 登录未完成：\(error.localizedDescription)"
+            }
+            return
+        }
+        let formatter = PersonNameComponentsFormatter()
+        let fullName = formatter.string(from: credential.fullName ?? PersonNameComponents())
+        errorMessage = nil
+        isBusy = true
+        Task {
+            defer { isBusy = false }
+            do {
+                try await account.loginWithApple(identityToken: identityToken, fullName: fullName)
+                app.authSkipped = false
+            } catch let error as OrbitAPIError {
+                errorMessage = friendlyMessage(for: error)
+            } catch {
+                errorMessage = "Apple 登录失败：\(error.localizedDescription)"
+            }
+        }
+    }
+
     private func friendlyMessage(for error: OrbitAPIError) -> String {
         switch error.code {
         case "USERNAME_TAKEN": return "用户名已被占用，换一个试试。"
         case "AUTH_FAILED": return "用户名或密码错误。"
         case "BAD_USERNAME": return "用户名需为 3~32 位字母、数字或下划线。"
         case "BAD_PASSWORD": return "密码需为 8~64 位。"
+        case "APPLE_TOKEN_INVALID": return "Apple 登录验证失败，请重新尝试。"
+        case "APPLE_AUTH_UNAVAILABLE": return "暂时无法验证 Apple 登录，请稍后重试。"
         default:
             if error.status == 429 { return "操作太频繁，请稍后再试。" }
             if error.status <= 0 { return "无法连接服务器，请检查网络后重试。" }

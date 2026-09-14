@@ -59,6 +59,15 @@ final class AccountStore: ObservableObject {
         try await finishAuth(OrbitAPIClient.decode(OrbitAPIClient.AuthResponse.self, from: data))
     }
 
+    /// Apple 的 identityToken 只交给 Orbit 后端验签；不写入本机或服务端数据库。
+    func loginWithApple(identityToken: String, fullName: String?) async throws {
+        var body: [String: Any] = ["identity_token": identityToken]
+        if let fullName, !fullName.isEmpty { body["full_name"] = fullName }
+        let data = try await OrbitAPIClient.request(
+            path: "/api/auth/apple", method: "POST", body: body, token: nil)
+        try await finishAuth(OrbitAPIClient.decode(OrbitAPIClient.AuthResponse.self, from: data))
+    }
+
     private func finishAuth(_ response: OrbitAPIClient.AuthResponse) async {
         _ = KeychainService.save(response.token, account: tokenAccount)
         username = response.user.username

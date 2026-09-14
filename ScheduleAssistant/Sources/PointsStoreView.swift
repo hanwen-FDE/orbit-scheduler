@@ -6,12 +6,14 @@ import StoreKit
 struct PointsStoreView: View {
     @ObservedObject private var account = AccountStore.shared
     @ObservedObject private var iap = IAPService.shared
+    @ObservedObject private var app = AppSettings.shared
 
     var body: some View {
         List {
             Section {
                 HStack {
                     Label("当前积分", systemImage: "sparkles")
+                        .foregroundStyle(orbitAccent())
                     Spacer()
                     if account.isFetchingPoints {
                         ProgressView().controlSize(.small)
@@ -47,27 +49,6 @@ struct PointsStoreView: View {
                 Text("积分包")
             }
 
-            Section {
-                Button {
-                    iap.restore()
-                } label: {
-                    HStack {
-                        Label(iap.isRestoring ? "正在恢复…" : "恢复购买", systemImage: "arrow.clockwise")
-                        Spacer()
-                        if iap.isRestoring { ProgressView().controlSize(.small) }
-                    }
-                }
-                .disabled(iap.isRestoring)
-                if let url = URL(string: "mailto:" + OrbitBackendConfig.supportEmail) {
-                    Link(destination: url) {
-                        Label("联系客服", systemImage: "envelope")
-                    }
-                }
-            } header: {
-                Text("帮助")
-            } footer: {
-                Text("积分为消耗型商品，仅在本 App 内使用；重复提交同一收据不会重复入账。充值遇到问题可通过邮件联系我们。")
-            }
         }
         .navigationTitle("积分商店")
         .navigationBarTitleDisplayMode(.inline)

@@ -9,7 +9,6 @@ struct SideDrawerView: View {
 
     @ObservedObject private var app = AppSettings.shared
     @ObservedObject private var account = AccountStore.shared
-    @ObservedObject private var iCloudSync = ICloudSyncService.shared
     @State private var briefingError = ""
     @State private var confirmLogout = false
 
@@ -45,46 +44,61 @@ struct SideDrawerView: View {
 
     private var accountSection: some View {
         Section {
-            HStack(spacing: 12) {
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 38))
-                    .foregroundStyle(orbitAccent())
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(account.username ?? "未登录")
-                        .font(.headline)
-                    Text(account.isLoggedIn ? "Orbit 积分账户" : "登录后使用云端 AI 识别")
-                        .font(.caption)
+            Button {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    NotificationCenter.default.post(name: .orbitAuthRequired, object: nil)
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 38))
+                        .foregroundStyle(orbitAccent())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(account.username ?? "登录或注册")
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Text(account.isLoggedIn ? "已登录 Orbit 账户" : "使用 Apple 账号或用户名登录")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.bold())
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
+            }
+            .buttonStyle(.plain)
+            .contextMenu {
                 if account.isLoggedIn {
-                    Button("退出登录") { confirmLogout = true }
-                        .font(.footnote)
-                }
-            }
-            HStack {
-                Label("积分余额", systemImage: "sparkles")
-                Spacer()
-                if account.isFetchingPoints {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text(account.points.map { "\($0)" } ?? "—")
-                        .font(.headline.monospacedDigit())
-                        .foregroundStyle(orbitAccent())
-                }
-            }
-            if !account.isLoggedIn {
-                Button {
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(name: .orbitAuthRequired, object: nil)
+                    Button(role: .destructive) { confirmLogout = true } label: {
+                        Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
                     }
-                } label: {
-                    drawerRow("登录 / 注册", systemImage: "person.badge.key")
                 }
             }
             NavigationLink(destination: PointsStoreView()) {
-                drawerRow("充值 · 积分商店", systemImage: "cart.circle")
+                HStack {
+                    Label("积分余额", systemImage: "sparkles")
+                        .foregroundStyle(orbitAccent())
+                    Spacer()
+                    if account.isFetchingPoints {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(account.points.map { "\($0) 积分" } ?? "—")
+                            .font(.headline.monospacedDigit())
+                            .foregroundStyle(orbitAccent())
+                    }
+                }
+            }
+            NavigationLink(destination: ICloudSyncSettingsView()) {
+                HStack {
+                    Label("iCloud 同步", systemImage: "icloud")
+                        .foregroundStyle(orbitAccent())
+                    Spacer()
+                    Text(app.icloudSyncEnabled ? "已开启" : "未开启")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text("我的")
@@ -141,40 +155,35 @@ struct SideDrawerView: View {
         } header: {
             Text("主题配色")
         } footer: {
-            Text("主题影响 App 内按钮与卡片配色；Logo 更换主屏幕图标。两者独立选择，互不绑定。")
+            Text("主题影响 App 内按钮、图标与卡片配色；Logo 颜色与主题一一对应。")
         }
     }
 
-    /// 桌面图标切换（iOS 原生 alternate icons，共 6 款）。
+    /// Logo 选择只展示图标，不再额外显示容易造成误解的颜色文字。
     private var logoRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
-                ForEach(IconService.allIcons, id: \.name) { icon in
-                    Button {
-                        IconService.apply(icon.name)
-                        app.alternateIcon = icon.name
-                    } label: {
-                        VStack(spacing: 6) {
-                            IconService.previewImage(named: icon.name)
-                                .resizable()
-                                .frame(width: 44, height: 44)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .strokeBorder(
-                                            (app.alternateIcon ?? "AppIcon") == icon.name ? orbitAccent() : .clear,
-                                            lineWidth: 2
-                                        )
-                                )
-                            Text(icon.title)
-                                .font(.caption2)
-                                .foregroundStyle((app.alternateIcon ?? "AppIcon") == icon.name ? orbitAccent() : .secondary)
+        HStack(spacing: 17) {
+            ForEach(OrbitThemePreset.allCases) { preset in
+                Button { app.theme = preset } label: {
+                    Ellipse()
+                        .stroke(preset.accent, lineWidth: 3)
+                        .frame(width: 31, height: 17)
+                        .rotationEffect(.degrees(-43))
+                        .padding(7)
+                        .background(
+                            Circle().fill(preset == app.theme ? preset.accent.opacity(0.16) : .clear)
+                        )
+                        .overlay {
+                            if preset == app.theme {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(preset.accent)
+                                    .offset(y: 19)
+                            }
                         }
-                    }
-                    .buttonStyle(.plain)
                 }
+                .buttonStyle(.plain)
             }
-            .padding(.vertical, 4)
+            Spacer(minLength: 0)
         }
     }
 
@@ -185,7 +194,7 @@ struct SideDrawerView: View {
             Picker("默认日历", selection: $app.defaultCalendarId) {
                 Text("未选择").tag(Optional<String>.none)
                 ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
-                    Text(cal.title).tag(Optional(cal.calendarIdentifier))
+                    Text(CalendarService.shared.calendarDisplayName(cal)).tag(Optional(cal.calendarIdentifier))
                 }
             }
             Picker("默认提醒", selection: $app.defaultReminderMinutes) {
@@ -231,9 +240,9 @@ struct SideDrawerView: View {
                             toggleReadableCalendar(calendar.calendarIdentifier, calendars: calendars)
                         } label: {
                             if isCalendarReadable(calendar.calendarIdentifier) {
-                                Label(calendar.title, systemImage: "checkmark")
+                                Label(CalendarService.shared.calendarDisplayName(calendar), systemImage: "checkmark")
                             } else {
-                                Text(calendar.title)
+                                Text(CalendarService.shared.calendarDisplayName(calendar))
                             }
                         }
                     }
@@ -258,7 +267,7 @@ struct SideDrawerView: View {
     private func readCalendarSummary(_ calendars: [EKCalendar]) -> String {
         guard let selected = app.visibleCalendarIds else { return "全部" }
         let selectedCalendars = calendars.filter { selected.contains($0.calendarIdentifier) }
-        if selectedCalendars.count == 1 { return selectedCalendars[0].title }
+        if selectedCalendars.count == 1 { return CalendarService.shared.calendarDisplayName(selectedCalendars[0]) }
         return "\(selectedCalendars.count) 个日历"
     }
 
@@ -332,7 +341,7 @@ struct SideDrawerView: View {
         }
     }
 
-    // MARK: - 帮助与设置（含 iCloud 同步）
+    // MARK: - 帮助与设置
 
     private var helpAndSettingsSection: some View {
         Section {
@@ -351,39 +360,8 @@ struct SideDrawerView: View {
                 drawerRow("设置", systemImage: "gearshape")
             }
 
-            // iCloud 同步：开关 + 立即同步 + 状态说明。
-            Toggle(isOn: $app.icloudSyncEnabled) {
-                Label("iCloud 同步", systemImage: "icloud")
-            }
-            .onChange(of: app.icloudSyncEnabled) { enabled in
-                if enabled {
-                    Task { await iCloudSync.syncNow() }
-                }
-            }
-            if app.icloudSyncEnabled {
-                Button {
-                    Task { await iCloudSync.syncNow() }
-                } label: {
-                    HStack {
-                        Label("立即同步", systemImage: "arrow.triangle.2.circlepath")
-                        Spacer()
-                        if iCloudSync.isSyncing {
-                            ProgressView().controlSize(.small)
-                        }
-                    }
-                }
-                if !iCloudSync.lastResultText.isEmpty {
-                    Text(iCloudSync.lastResultText)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
         } header: {
             Text("帮助与设置")
-        } footer: {
-            Text(app.icloudSyncEnabled
-                 ? "对话与通知记录通过 iCloud 在你的设备间保持一致；日程本身始终存放在系统日历中。"
-                 : "开启后，对话与通知记录会通过 iCloud 在你的设备间同步。")
         }
     }
 

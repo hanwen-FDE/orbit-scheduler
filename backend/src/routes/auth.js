@@ -5,6 +5,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 const users = require('../services/users');
+const appleSignIn = require('../services/appleSignIn');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { rateLimit } = require('../middleware/rateLimit');
 
@@ -30,6 +31,19 @@ router.post('/register', authLimiter, asyncHandler(async (req, res) => {
 router.post('/login', authLimiter, asyncHandler(async (req, res) => {
   const { username, password } = req.body || {};
   const user = users.login(username, password);
+  res.json({ token: signToken(user), user: users.publicUser(user) });
+}));
+
+// POST /api/auth/apple  { identity_token, full_name? }
+// 身份令牌只在本次请求中使用，服务端不会保存 Apple 的原始令牌。
+router.post('/apple', authLimiter, asyncHandler(async (req, res) => {
+  const { identity_token: identityToken, full_name: fullName } = req.body || {};
+  const claims = await appleSignIn.verifyIdentityToken(identityToken);
+  const user = users.loginWithApple({
+    subject: claims.sub,
+    email: typeof claims.email === 'string' ? claims.email : null,
+    displayName: typeof fullName === 'string' ? fullName.trim().slice(0, 80) : null,
+  });
   res.json({ token: signToken(user), user: users.publicUser(user) });
 }));
 

@@ -392,7 +392,7 @@ final class ChatStore: ObservableObject {
             case .noInput:
                 guidance = "请输入文字或选择图片后再试。"
             case .cloudNotReady:
-                guidance = "Orbit 云端服务需要登录并领取对话令牌，已为你打开登录页。"
+                guidance = "需要先登录 Orbit 账号才能使用云端 AI。登录页已打开，完成登录后请直接重试。"
             case .insufficientPoints:
                 guidance = "积分不足，正在为你打开积分商店；充值后直接重试即可。"
             case .cloudKeyInvalid:
@@ -452,7 +452,7 @@ final class ChatStore: ObservableObject {
             notes: parsed.notes,
             reminderMinutes: AppSettings.shared.defaultReminderMinutes,
             calendarIdentifier: calendar.calendarIdentifier,
-            calendarTitle: calendar.title,
+            calendarTitle: CalendarService.shared.calendarDisplayName(calendar),
             recurrence: parsed.recurrence
         )
         // 写入前检查，不自动改动用户指定时间；冲突和建议只显示在卡片中供用户决定。
@@ -581,7 +581,7 @@ final class ChatStore: ObservableObject {
         if snap.eventIdentifier == nil {
             guard let calendar = CalendarService.shared.availableCalendars().first(where: { $0.calendarIdentifier == calendarId }) else { return }
             snap.calendarIdentifier = calendarId
-            snap.calendarTitle = calendar.title
+            snap.calendarTitle = CalendarService.shared.calendarDisplayName(calendar)
         } else if case .failure(let error) = CalendarService.shared.moveToCalendar(snapshot: &snap, to: calendarId) {
             reportWriteFailure(messageId: messageId, action: "移动日历", snapshot: snap, error: error)
             return

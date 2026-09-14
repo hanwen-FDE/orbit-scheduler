@@ -66,6 +66,16 @@ CREATE TABLE IF NOT EXISTS quota_ops (
 CREATE INDEX IF NOT EXISTS idx_quota_ops_user ON quota_ops(user_id);
 `);
 
+// 兼容已经部署过的 SQLite：Apple 登录上线时为旧表补列，不影响已有账号。
+function ensureUserColumn(name, definition) {
+  const columns = db.prepare('PRAGMA table_info(users)').all().map((column) => column.name);
+  if (!columns.includes(name)) db.exec(`ALTER TABLE users ADD COLUMN ${name} ${definition}`);
+}
+ensureUserColumn('apple_subject', 'TEXT');
+ensureUserColumn('apple_email', 'TEXT');
+ensureUserColumn('display_name', 'TEXT');
+db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_subject ON users(apple_subject) WHERE apple_subject IS NOT NULL');
+
 logger.info('db_ready', { path: config.databasePath });
 
 module.exports = db;

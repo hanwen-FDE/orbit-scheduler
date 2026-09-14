@@ -158,7 +158,7 @@ enum OrbitAPIClient {
 
     private static func mockResponse(for path: String, method: String, body: [String: Any]?) throws -> Data {
         switch path {
-        case "/api/auth/register", "/api/auth/login":
+        case "/api/auth/register", "/api/auth/login", "/api/auth/apple":
             let user: [String: Any] = [
                 "id": 1,
                 "username": (body?["username"] as? String) ?? "mock_user",

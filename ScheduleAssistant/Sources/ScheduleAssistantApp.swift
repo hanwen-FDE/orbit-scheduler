@@ -56,8 +56,9 @@ struct OrbitRootView: View {
                 if newValue != nil { showChat = true }
             }
             .onReceive(NotificationCenter.default.publisher(for: .orbitAuthRequired)) { _ in
-                // 首次使用云端服务、或令牌 401 失效：弹出登录页。
-                if app.onboardingCompleted { showAuth = true }
+                // 首次使用云端服务、或令牌 401 失效：始终实际弹出登录页。
+                // 不能在对话中声称“已打开”却因状态条件而什么也不发生。
+                showAuth = true
             }
             .onChange(of: account.isLoggedIn) { loggedIn in
                 guard app.onboardingCompleted else { return }

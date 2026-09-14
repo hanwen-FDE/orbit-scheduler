@@ -51,6 +51,7 @@
 		1000000148 /* AuthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000148; };
 		1000000149 /* PointsStoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000149; };
 		1000000150 /* ICloudSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000150; };
+		1000000151 /* ICloudSyncSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2000000151; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -125,6 +126,7 @@
 		2000000148 /* AuthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthView.swift; sourceTree = "<group>"; };
 		2000000149 /* PointsStoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PointsStoreView.swift; sourceTree = "<group>"; };
 		2000000150 /* ICloudSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSyncService.swift; sourceTree = "<group>"; };
+		2000000151 /* ICloudSyncSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ICloudSyncSettingsView.swift; sourceTree = "<group>"; };
 		3000000001 /* OrbitWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = OrbitWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -182,6 +184,7 @@
 				2000000148 /* AuthView.swift */,
 				2000000149 /* PointsStoreView.swift */,
 				2000000150 /* ICloudSyncService.swift */,
+				2000000151 /* ICloudSyncSettingsView.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -322,6 +325,7 @@
 				1000000148 /* AuthView.swift in Sources */,
 				1000000149 /* PointsStoreView.swift in Sources */,
 				1000000150 /* ICloudSyncService.swift in Sources */,
+				1000000151 /* ICloudSyncSettingsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

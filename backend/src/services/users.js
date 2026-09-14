@@ -10,6 +10,7 @@
 // 第一次需要积分（购买/领令牌）时才创建钱包。
 // =====================================================================
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const db = require('../db');
 const config = require('../config');
 const logger = require('../logger');
@@ -21,7 +22,8 @@ const USERNAME_RE = /^[A-Za-z0-9_]{3,32}$/;
 function publicUser(user) {
   return {
     id: user.id,
-    username: user.username,
+    // Apple 首次授权提供的姓名仅用于界面展示，内部用户名不暴露给用户。
+    username: user.display_name || user.username,
     role: user.role,
     created_at: user.created_at,
   };
@@ -60,6 +62,34 @@ function login(username, password) {
     throw new ApiError('AUTH_FAILED', '用户名或密码错误', 401);
   }
   if (user.status !== 'active') throw new ApiError('AUTH_DISABLED', '账号已被禁用', 403);
+  return user;
+}
+
+/// Apple 的 sub 是同一开发团队 + 同一 App 下稳定且不可逆的用户标识。
+/// 用它做唯一键，用户更换邮箱或 Apple 隐藏邮箱也仍能回到同一 Orbit 账户。
+function loginWithApple({ subject, email, displayName }) {
+  let user = db.prepare('SELECT * FROM users WHERE apple_subject = ?').get(subject);
+  if (user) {
+    if (user.status !== 'active') throw new ApiError('AUTH_DISABLED', '账号已被禁用', 403);
+    // Apple 仅在首次授权时通常提供姓名/邮箱；后续空字段绝不覆盖已有资料。
+    if ((!user.display_name && displayName) || (!user.apple_email && email)) {
+      db.prepare(
+        `UPDATE users SET display_name = COALESCE(display_name, ?),
+         apple_email = COALESCE(apple_email, ?), updated_at = datetime('now') WHERE id = ?`
+      ).run(displayName || null, email || null, user.id);
+      user = findById(user.id);
+    }
+    return user;
+  }
+
+  const suffix = crypto.createHash('sha256').update(subject).digest('hex').slice(0, 20);
+  const username = `apple_${suffix}`;
+  const passwordHash = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
+  const info = db.prepare(
+    'INSERT INTO users (username, password_hash, apple_subject, apple_email, display_name) VALUES (?, ?, ?, ?, ?)'
+  ).run(username, passwordHash, subject, email || null, displayName || 'Apple 用户');
+  user = findById(info.lastInsertRowid);
+  logger.info('user_registered_apple', { user_id: user.id });
   return user;
 }
 
@@ -141,6 +171,6 @@ async function issueApiKey(user) {
 }
 
 module.exports = {
-  publicUser, register, login, findById, bootstrapAdmin,
+  publicUser, register, login, loginWithApple, findById, bootstrapAdmin,
   ensureIosWallet, getIosPoints, issueApiKey, validateCredentials,
 };

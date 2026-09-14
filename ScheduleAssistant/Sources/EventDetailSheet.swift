@@ -118,7 +118,7 @@ struct EventDetailSheet: View {
                         }
                         Menu {
                             ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
-                                Button(cal.title) {
+                                Button(CalendarService.shared.calendarDisplayName(cal)) {
                                     chat.changeCalendar(messageId: messageId, to: cal.calendarIdentifier)
                                     dismiss()
                                 }

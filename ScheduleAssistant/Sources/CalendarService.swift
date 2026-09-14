@@ -60,7 +60,15 @@ final class CalendarService {
     }
 
     func calendarTitle(id: String) -> String? {
-        store.calendar(withIdentifier: id)?.title
+        store.calendar(withIdentifier: id).map(calendarDisplayName)
+    }
+
+    /// 日历标题本身并不唯一（例如 iCloud 和 Gmail 都可能叫“日历”）。
+    /// 所有“选择日历”的入口都应使用此名称，明确显示所属账户。
+    func calendarDisplayName(_ calendar: EKCalendar) -> String {
+        let source = calendar.source.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !source.isEmpty, source != calendar.title else { return calendar.title }
+        return "\(source) · \(calendar.title)"
     }
 
     /// 手机上全部日历（含只读，供“读取哪些日历”设置展示）。
@@ -193,7 +201,7 @@ final class CalendarService {
         do {
             try store.save(event, span: span)
             snapshot.calendarIdentifier = calendarId
-            snapshot.calendarTitle = target.title
+            snapshot.calendarTitle = calendarDisplayName(target)
             return .success(())
         } catch {
             return .failure(.saveFailed(error.localizedDescription))
@@ -230,7 +238,7 @@ final class CalendarService {
                     title: $0.title ?? "未命名日程",
                     start: $0.startDate,
                     end: $0.endDate,
-                    calendarTitle: $0.calendar?.title ?? "系统日历"
+                    calendarTitle: $0.calendar.map(calendarDisplayName) ?? "系统日历"
                 )
             }
             .sorted { $0.start < $1.start }
