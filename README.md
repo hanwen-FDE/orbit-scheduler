@@ -1,4 +1,4 @@
-# Orbit・轨道
+# Orbit 轨道
 
 **All your plans run on time orbit.**
 **所有计划，运行于时间轨道。**
@@ -39,13 +39,15 @@ Orbit（轨道）是一款 iOS 原生 AI 日程助手。名字取自拉丁语 *o
 2. **下载 IPA**：本仓库 *Actions* → 最新成功运行 → Artifacts → 下载 `ScheduleAssistant-ipa` → 解压出 `ScheduleAssistant.ipa`（存放路径建议纯英文）
 3. **侧载安装**：电脑安装 [Sideloadly](https://sideloadly.io)（v0.60+）→ iPhone 连线 → 拖入 IPA → Apple Account 填你的 Apple ID → 密码填 **Apple ID 主密码**（开了两步验证的账号不能用 App 专用密码；弹出验证码时输入 iPhone 上显示的 6 位码）→ Start
 4. **信任证书**：手机 *设置 → 通用 → VPN与设备管理* → 信任你的 Apple ID → 打开 Orbit
-5. **首次配置**：App 内左上角头像 → AI 识别（API）→ 填入大模型 API Key（推荐智谱 [open.bigmodel.cn](https://open.bigmodel.cn)）→ 测试连接
+5. **首次配置**：注册 / 登录 Orbit 账号即可使用云端 AI 识别（按积分计费，积分商店内充值）；也可以在「设置 → 高级 → 自定义模型服务」使用自己的大模型 API Key（推荐智谱 [open.bigmodel.cn](https://open.bigmodel.cn)）
+
+产品支持邮箱：`service.orbit@iChatStudio.com`。
 
 > 免费签名有效期 7 天，到期后重复第 3 步重装即可，数据不丢。详细排障见 `docs/开发报告.html`。
 
 ### 技术栈
 
-SwiftUI（iOS 18+）· EventKit · Speech · PhotosUI · 多 LLM Provider 架构 · GitHub Actions 云构建
+SwiftUI（iOS 15+，iPhone）· EventKit · Speech · PhotosUI · 积分账号体系（JWT + StoreKit 内购 + OneAPI 云端直连）· 多 LLM Provider 架构 · iCloud 同步 · GitHub Actions 云构建
 
 ---
 
@@ -81,13 +83,15 @@ Repository: [github.com/hanwen-FDE/orbit-scheduler](https://github.com/hanwen-FD
 2. **Get the IPA**: this repo → *Actions* → latest successful run → Artifacts → download `ScheduleAssistant-ipa` → unzip to get `ScheduleAssistant.ipa`
 3. **Sideload**: install [Sideloadly](https://sideloadly.io) (v0.60+) → connect iPhone → drop the IPA in → sign in with your Apple ID and your **main Apple ID password** (app-specific passwords do NOT work with free accounts; enter the 6-digit 2FA code when prompted) → Start
 4. **Trust the profile**: *Settings → General → VPN & Device Management* → trust your Apple ID → launch Orbit
-5. **First-run setup**: avatar (top-left) → AI API → paste your LLM API key (Zhipu recommended: [open.bigmodel.cn](https://open.bigmodel.cn)) → Test Connection
+5. **First-run setup**: sign up / log in to your Orbit account to use the cloud AI (credits-based, top up in the points store); or bring your own LLM API key under *Settings → Advanced → Custom model service* (Zhipu recommended: [open.bigmodel.cn](https://open.bigmodel.cn))
+
+Support: `service.orbit@iChatStudio.com`.
 
 > Free signing lasts 7 days; repeat step 3 to re-sign. Data is preserved. Full troubleshooting guide: `docs/开发报告.html`.
 
 ### Tech stack
 
-SwiftUI (iOS 18+) · EventKit · Speech · PhotosUI · multi-LLM provider architecture · GitHub Actions cloud builds
+SwiftUI (iOS 15+, iPhone) · EventKit · Speech · PhotosUI · credits account system (JWT + StoreKit IAP + OneAPI cloud) · multi-LLM provider architecture · iCloud sync · GitHub Actions cloud builds
 
 ---
 

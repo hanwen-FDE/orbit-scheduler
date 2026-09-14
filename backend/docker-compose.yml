@@ -1,0 +1,32 @@
+# =====================================================================
+# Orbit 积分后端部署配置
+#
+# 使用前：
+#   1. 在本目录执行: cp .env.example .env 并填写完成
+#   2. 确认 OneAPI 所在的 Docker 网络名（见 README "对接 OneAPI" 一节），
+#      默认写的是 one-api_default，按实际修改下方 networks 部分
+#
+# 启动 / 更新：
+#   docker compose up -d --build
+# =====================================================================
+services:
+  orbit-points:
+    build: .
+    container_name: orbit-points
+    restart: unless-stopped
+    ports:
+      - "8080:8080"          # 宿主机端口:容器端口，改左边即可
+    env_file: .env
+    volumes:
+      - ./data:/app/data     # SQLite 数据库落在宿主机，删容器不丢数据
+    networks:
+      - oneapi-net
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  oneapi-net:
+    external: true           # 使用 OneAPI 已在的外部网络；网络名不同请改这里

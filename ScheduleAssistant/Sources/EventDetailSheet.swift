@@ -40,12 +40,17 @@ struct EventDetailSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        OrbitNavigationStack {
             Form {
                 Section("日程") {
                     TextField("标题", text: $title)
                     TextField("地点（可选）", text: $location)
-                    TextField("备注（可选）", text: $notes, axis: .vertical)
+                    if #available(iOS 16.0, *) {
+                        TextField("备注（可选）", text: $notes, axis: .vertical)
+                            .lineLimit(3...6)
+                    } else {
+                        TextField("备注（可选）", text: $notes)
+                    }
                 }
                 Section("时间") {
                     Toggle("全天", isOn: $isAllDay)
@@ -140,13 +145,13 @@ struct EventDetailSheet: View {
             }
             .navigationTitle("编辑日程")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(orbitAccent())
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
                 }
             }
         }
-        .presentationDetents([.large])
         .orbitEdgeSwipeBack { dismiss() }
         .confirmationDialog("删除循环日程", isPresented: $showDeleteOptions, titleVisibility: .visible) {
             Button("只删除这一次", role: .destructive) {

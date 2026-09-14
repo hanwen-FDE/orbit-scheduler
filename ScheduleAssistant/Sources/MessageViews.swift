@@ -169,6 +169,7 @@ struct MessageRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .briefingHighlight(messageId: message.id)
         case .eveningBriefing:
             Button(action: { onOpenToday?() }) {
                 briefingBody(title: "今日晚报", icon: "moon.stars.fill")
@@ -176,6 +177,7 @@ struct MessageRow: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .briefingHighlight(messageId: message.id)
         case .eventCard:
             if let snap = message.event {
                 EventCardView(messageId: message.id, snapshot: snap, onTap: onTapCard)
@@ -211,6 +213,29 @@ struct MessageRow: View {
     private var durationText: String {
         let seconds = Int(message.voiceDuration ?? 0)
         return String(format: "%d:%02d", seconds / 60, seconds % 60)
+    }
+}
+
+/// 从消息中心跳转到简报卡片时的高亮描边，随 ChatStore.highlightMessageId 变化。
+private struct BriefingHighlightModifier: ViewModifier {
+    @EnvironmentObject private var chat: ChatStore
+    let messageId: UUID
+
+    func body(content: Content) -> some View {
+        content.overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .strokeBorder(
+                    orbitAccent().opacity(chat.highlightMessageId == messageId ? 0.85 : 0),
+                    lineWidth: 2
+                )
+                .animation(.easeInOut(duration: 0.4), value: chat.highlightMessageId)
+        )
+    }
+}
+
+extension View {
+    func briefingHighlight(messageId: UUID) -> some View {
+        modifier(BriefingHighlightModifier(messageId: messageId))
     }
 }
 
@@ -296,9 +321,10 @@ struct EventCardView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(snapshot.deleted)
-                .popover(isPresented: $showDatePicker, arrowEdge: .top) {
-                    dateEditor
-                        .presentationCompactAdaptation(.popover)
+                // 用 sheet 而不是 popover：卡片位于屏幕底部时 popover 会被裁掉，
+                // sheet 从底部弹出且始终完整可见。
+                .sheet(isPresented: $showDatePicker) {
+                    dateEditor.orbitDetent(height: 430)
                 }
 
                 Spacer(minLength: 0)
@@ -314,9 +340,8 @@ struct EventCardView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(snapshot.deleted)
-                .popover(isPresented: $showTimePicker, arrowEdge: .top) {
-                    timeEditor
-                        .presentationCompactAdaptation(.popover)
+                .sheet(isPresented: $showTimePicker) {
+                    timeEditor.orbitDetent(height: 340)
                 }
             }
 

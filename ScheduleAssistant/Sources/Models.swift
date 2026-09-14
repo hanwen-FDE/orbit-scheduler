@@ -34,7 +34,7 @@ enum OrbitThemePreset: String, CaseIterable, Identifiable {
     }
 }
 
-/// 左上角品牌标识：斜椭圆（随主题变色）+「Orbit 轨迹」。
+/// 左上角品牌标识：斜椭圆（随主题变色）+「Orbit 轨道」。
 struct OrbitBrandMark: View {
     @ObservedObject private var app = AppSettings.shared
 
@@ -48,7 +48,7 @@ struct OrbitBrandMark: View {
                 )
                 .frame(width: 24, height: 13)
                 .rotationEffect(.degrees(-43))
-            Text("Orbit 轨迹")
+            Text("Orbit 轨道")
                 .font(.title3.bold())
                 .foregroundStyle(app.theme.accent)
         }
@@ -282,6 +282,8 @@ final class AppSettings: ObservableObject {
     private let kTheme = "orbit.theme"
     private let kVisibleCalendars = "orbit.visibleCalendarIds"
     private let kOnboarding = "orbit.onboardingCompleted"
+    private let kICloudSync = "orbit.icloudSyncEnabled"
+    private let kAuthSkipped = "orbit.authSkipped"
 
     @Published var defaultCalendarId: String? {
         didSet {
@@ -351,6 +353,14 @@ final class AppSettings: ObservableObject {
     @Published var onboardingCompleted: Bool {
         didSet { UserDefaults.standard.set(onboardingCompleted, forKey: kOnboarding) }
     }
+    /// iCloud 同步开关（对话与通知记录）。
+    @Published var icloudSyncEnabled: Bool {
+        didSet { UserDefaults.standard.set(icloudSyncEnabled, forKey: kICloudSync) }
+    }
+    /// 登录页“暂不登录”跳过标记；聊天用到云端服务时会再次引导登录。
+    @Published var authSkipped: Bool {
+        didSet { UserDefaults.standard.set(authSkipped, forKey: kAuthSkipped) }
+    }
 
     /// 晨报和晚报均由用户直接选择固定的每天推送时间。
     var morningBriefingTime: (hour: Int, minute: Int) {
@@ -382,6 +392,8 @@ final class AppSettings: ObservableObject {
         visibleCalendarIds = UserDefaults.standard.stringArray(forKey: kVisibleCalendars)
         theme = OrbitThemePreset(rawValue: UserDefaults.standard.string(forKey: kTheme) ?? "") ?? .blue
         onboardingCompleted = UserDefaults.standard.bool(forKey: kOnboarding)
+        icloudSyncEnabled = UserDefaults.standard.object(forKey: kICloudSync) as? Bool ?? false
+        authSkipped = UserDefaults.standard.object(forKey: kAuthSkipped) as? Bool ?? false
         if let calendarId = defaultCalendarId,
            var readableIds = visibleCalendarIds,
            !readableIds.contains(calendarId) {

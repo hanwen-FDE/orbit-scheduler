@@ -42,6 +42,12 @@ enum LLMError: LocalizedError {
     case noInput
     case invalidResponse(String)
     case http(Int, String)
+    /// Orbit 云端服务尚未登录或未领取对话令牌。
+    case cloudNotReady
+    /// OneAPI 返回积分（额度）不足。
+    case insufficientPoints
+    /// 对话令牌无效或已过期。
+    case cloudKeyInvalid
 
     var errorDescription: String? {
         switch self {
@@ -49,6 +55,9 @@ enum LLMError: LocalizedError {
         case .noInput: return "请输入文字或选择图片"
         case .invalidResponse(let raw): return "模型返回无法解析：\(raw.prefix(300))"
         case .http(let code, let body): return "请求失败(\(code))：\(body.prefix(300))"
+        case .cloudNotReady: return "Orbit 云端服务尚未就绪（需要登录并领取对话令牌）"
+        case .insufficientPoints: return "积分不足，无法完成本次识别"
+        case .cloudKeyInvalid: return "对话令牌无效或已过期"
         }
     }
 }

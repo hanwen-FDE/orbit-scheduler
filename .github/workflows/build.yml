@@ -6,10 +6,16 @@ on:
       - main
       - "codex/**"
   workflow_dispatch:   # 也支持手动触发
+    inputs:
+      signed:
+        description: '正式签名构建并上传 TestFlight（需要 ASC_* Secrets）'
+        type: boolean
+        default: false
 
 jobs:
   # 真机未签名 IPA：下载后用 Sideloadly 重签安装到 iPhone
   build-ipa:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.signed) }}
     runs-on: macos-14   # Apple Silicon macOS + Xcode 16（含 iOS 18 SDK）
     steps:
       - name: 检出代码
@@ -59,6 +65,7 @@ jobs:
 
   # 模拟器版 .app：上传 Appetize.io 在浏览器中运行
   build-simulator:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.signed) }}
     runs-on: macos-14
     steps:
       - name: 检出代码
@@ -90,3 +97,85 @@ jobs:
         with:
           name: ScheduleAssistant-app
           path: ScheduleAssistant-app.zip
+
+  # 正式签名构建（App Store 分发）并上传到 TestFlight / App Store Connect。
+  # 前置条件：账号审核通过后，在仓库 Settings → Secrets → Actions 配置：
+  #   ASC_KEY_ID      App Store Connect API Key 的 Key ID
+  #   ASC_ISSUER_ID   API Key 的 Issuer ID
+  #   ASC_KEY_P8      .p8 密钥文件内容（base64 编码）
+  #   ASC_TEAM_ID     开发者 Team ID（developer.apple.com → Membership 详情页）
+  # 然后手动触发本工作流并勾选 signed。
+  build-signed:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
+    runs-on: macos-14
+    env:
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 校验签名密钥是否已配置
+        run: |
+          missing=0
+          for v in ASC_KEY_ID ASC_ISSUER_ID ASC_TEAM_ID; do
+            if [ -z "${!v}" ]; then
+              echo "::error::缺少仓库 Secret：$v（App Store Connect API Key / Team ID，见本 job 顶部注释）"
+              missing=1
+            fi
+          done
+          exit $missing
+
+      - name: 写入 App Store Connect API Key
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s' "${{ secrets.ASC_KEY_P8 }}" | base64 --decode > ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8
+
+      - name: 选择最新 Xcode（含 iOS 18 SDK）
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: 编译并签名（自动注册 App ID / 分发证书 / 描述文件）
+        run: |
+          xcodebuild \
+            -project ScheduleAssistant.xcodeproj \
+            -scheme ScheduleAssistant \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            -archivePath build/Orbit.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$ASC_TEAM_ID" \
+            archive
+
+      - name: 导出 App Store Connect 分发 IPA
+        run: |
+          printf '%s' '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>method</key><string>app-store-connect</string><key>destination</key><string>export</string><key>teamID</key><string>'"$ASC_TEAM_ID"'</string></dict></plist>' > build/ExportOptions.plist
+          xcodebuild -exportArchive \
+            -exportOptionsPlist build/ExportOptions.plist \
+            -archivePath build/Orbit.xcarchive \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: 上传到 TestFlight / App Store Connect
+        run: |
+          xcrun altool --upload-app \
+            --type ios \
+            --file build/export/*.ipa \
+            --apiKey "$ASC_KEY_ID" \
+            --apiIssuer "$ASC_ISSUER_ID"
+
+      - name: 备份签名 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ScheduleAssistant-signed-ipa
+          path: build/export/*.ipa

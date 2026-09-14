@@ -1,5 +1,31 @@
-import Foundation
+﻿import Foundation
 import EventKit
+
+/// EventKit 写操作失败原因。上层必须据此提示用户；
+/// 任何写、改、删都不允许静默失败或在界面上假报成功。
+enum CalendarWriteError: LocalizedError, Equatable {
+    /// 原事件已不在系统日历中（多半是用户在系统日历里删掉了）。
+    case eventNotFound
+    /// 目标日历只读（订阅、他人共享等），不能写入或修改。
+    case calendarReadOnly(String)
+    /// 目标日历已不存在（被删除或账户退出）。
+    case calendarUnavailable(String)
+    /// EventKit 保存失败（权限、账户、存储等原因）。
+    case saveFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .eventNotFound:
+            return "原日程已不在系统日历中（可能刚被删除）。为避免产生重复日程，Orbit 不会自动重建，请重新发送完整安排。"
+        case .calendarReadOnly(let title):
+            return "日历「\(title)」是只读日历（订阅或他人共享），不能在 Orbit 中修改。"
+        case .calendarUnavailable(let title):
+            return "找不到目标日历「\(title)」，它可能已被删除或账户已退出登录。"
+        case .saveFailed(let reason):
+            return "写入系统日历失败：\(reason)"
+        }
+    }
+}
 
 /// 系统日历读写（EventKit）
 final class CalendarService {
@@ -10,7 +36,14 @@ final class CalendarService {
     func ensureAccess() async -> EKAuthorizationStatus {
         var status = EKEventStore.authorizationStatus(for: .event)
         if status == .notDetermined {
-            _ = try? await store.requestFullAccessToEvents()
+            if #available(iOS 17.0, *) {
+                _ = try? await store.requestFullAccessToEvents()
+            } else {
+                // iOS 15/16 的统一授权入口；已废弃但在旧系统是唯一选择。
+                _ = await withCheckedContinuation { continuation in
+                    store.requestAccess(to: .event) { _, _ in continuation.resume() }
+                }
+            }
             status = EKEventStore.authorizationStatus(for: .event)
         }
         return status
@@ -51,65 +84,119 @@ final class CalendarService {
     // MARK: - 事件 CRUD
 
     @discardableResult
-    func createEvent(_ snapshot: EventSnapshot) -> String? {
+    func createEvent(_ snapshot: EventSnapshot) -> Result<String, CalendarWriteError> {
+        let calendar = store.calendar(withIdentifier: snapshot.calendarIdentifier)
+            ?? store.defaultCalendarForNewEvents
+        guard let calendar, calendar.allowsContentModifications else {
+            return .failure(.calendarReadOnly(snapshot.calendarTitle))
+        }
         let event = EKEvent(eventStore: store)
         apply(snapshot, to: event, updateRecurrence: true)
         do {
             try store.save(event, span: .thisEvent)
-            return event.eventIdentifier
+            guard let identifier = event.eventIdentifier else {
+                return .failure(.saveFailed("保存后未能取得日程标识"))
+            }
+            return .success(identifier)
         } catch {
-            return nil
+            return .failure(.saveFailed(error.localizedDescription))
         }
     }
 
-    func updateEvent(_ snapshot: inout EventSnapshot, updateRecurrence: Bool = false) {
+    /// `span` 为 nil 时按原有规则推断（循环日程 = 这一项及以后）。
+    /// 原事件找不到时**绝不自动重建**，交由上层提示用户，避免制造重复日程。
+    @discardableResult
+    func updateEvent(
+        _ snapshot: inout EventSnapshot,
+        updateRecurrence: Bool = false,
+        span overrideSpan: EKSpan? = nil
+    ) -> Result<Void, CalendarWriteError> {
         guard let id = snapshot.eventIdentifier,
               let event = store.event(withIdentifier: id) else {
-            // 原事件不存在（可能被用户在系统日历里删了），重新创建
-            snapshot.eventIdentifier = createEvent(snapshot)
-            return
+            return .failure(.eventNotFound)
+        }
+        guard event.calendar.allowsContentModifications else {
+            return .failure(.calendarReadOnly(event.calendar.title))
         }
         apply(snapshot, to: event, updateRecurrence: updateRecurrence)
         // 对循环事件，编辑的是“这一项及后续”，避免只修改某一次后
         // 让卡片中的循环规则与系统日历中的规则脱节。
-        let span: EKSpan = (snapshot.recurrence != nil || event.hasRecurrenceRules)
-            ? .futureEvents : .thisEvent
-        try? store.save(event, span: span)
+        let span: EKSpan = overrideSpan
+            ?? ((snapshot.recurrence != nil || event.hasRecurrenceRules) ? .futureEvents : .thisEvent)
+        do {
+            try store.save(event, span: span)
+            return .success(())
+        } catch {
+            return .failure(.saveFailed(error.localizedDescription))
+        }
     }
 
-    func deleteEvent(snapshot: EventSnapshot, includingFuture: Bool = false) {
+    /// 找不到原事件视为目标已达成（它已不在日历里），其余失败必须上报。
+    @discardableResult
+    func deleteEvent(snapshot: EventSnapshot, includingFuture: Bool = false) -> Result<Void, CalendarWriteError> {
         guard let id = snapshot.eventIdentifier,
-              let event = store.event(withIdentifier: id) else { return }
-        try? store.remove(event, span: includingFuture ? .futureEvents : .thisEvent)
+              let event = store.event(withIdentifier: id) else {
+            return .success(())
+        }
+        guard event.calendar.allowsContentModifications else {
+            return .failure(.calendarReadOnly(event.calendar.title))
+        }
+        do {
+            try store.remove(event, span: includingFuture ? .futureEvents : .thisEvent)
+            return .success(())
+        } catch {
+            return .failure(.saveFailed(error.localizedDescription))
+        }
     }
 
     /// 增删提醒闹钟；minutes=nil 移除全部提醒
-    func setReminder(snapshot: EventSnapshot, minutes: Int?) {
+    @discardableResult
+    func setReminder(snapshot: EventSnapshot, minutes: Int?) -> Result<Void, CalendarWriteError> {
         guard let id = snapshot.eventIdentifier,
-              let event = store.event(withIdentifier: id) else { return }
+              let event = store.event(withIdentifier: id) else {
+            return .failure(.eventNotFound)
+        }
+        guard event.calendar.allowsContentModifications else {
+            return .failure(.calendarReadOnly(event.calendar.title))
+        }
         event.alarms = []
         if let minutes {
             event.addAlarm(EKAlarm(relativeOffset: TimeInterval(-minutes * 60)))
         }
         let span: EKSpan = event.hasRecurrenceRules ? .futureEvents : .thisEvent
-        try? store.save(event, span: span)
+        do {
+            try store.save(event, span: span)
+            return .success(())
+        } catch {
+            return .failure(.saveFailed(error.localizedDescription))
+        }
     }
 
     /// 移动到另一个日历
     @discardableResult
-    func moveToCalendar(snapshot: inout EventSnapshot, to calendarId: String) -> Bool {
+    func moveToCalendar(snapshot: inout EventSnapshot, to calendarId: String) -> Result<Void, CalendarWriteError> {
         guard let id = snapshot.eventIdentifier,
-              let event = store.event(withIdentifier: id),
-              let target = store.calendar(withIdentifier: calendarId) else { return false }
+              let event = store.event(withIdentifier: id) else {
+            return .failure(.eventNotFound)
+        }
+        guard let target = store.calendar(withIdentifier: calendarId) else {
+            return .failure(.calendarUnavailable(snapshot.calendarTitle))
+        }
+        guard target.allowsContentModifications else {
+            return .failure(.calendarReadOnly(target.title))
+        }
+        guard event.calendar.allowsContentModifications else {
+            return .failure(.calendarReadOnly(event.calendar.title))
+        }
         event.calendar = target
+        let span: EKSpan = event.hasRecurrenceRules ? .futureEvents : .thisEvent
         do {
-            let span: EKSpan = event.hasRecurrenceRules ? .futureEvents : .thisEvent
             try store.save(event, span: span)
             snapshot.calendarIdentifier = calendarId
             snapshot.calendarTitle = target.title
-            return true
+            return .success(())
         } catch {
-            return false
+            return .failure(.saveFailed(error.localizedDescription))
         }
     }
 
@@ -117,7 +204,7 @@ final class CalendarService {
 
     /// 需要“完全访问”才能读取现有日程；如果用户只给写入权限，安全地返回空结果。
     func conflicts(for snapshot: EventSnapshot) -> [CalendarConflict] {
-        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess,
+        guard EKEventStore.authorizationStatus(for: .event).orbitCanReadEvents,
               snapshot.end > snapshot.start else { return [] }
 
         let predicate = store.predicateForEvents(
@@ -152,7 +239,7 @@ final class CalendarService {
     /// 优先原日期和相近时段，并严格限制在用户清醒时间内。
     /// Orbit 只给出建议，绝不自行移动用户真实日程。
     func suggestedStart(for snapshot: EventSnapshot, searchDays: Int = 14) -> Date? {
-        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess,
+        guard EKEventStore.authorizationStatus(for: .event).orbitCanReadEvents,
               !snapshot.isAllDay,
               snapshot.end > snapshot.start else { return nil }
 
@@ -194,7 +281,7 @@ final class CalendarService {
 
     /// 晨间简报使用：只读取当天真正的系统日程，且要求用户已授予完全访问。
     func todayEvents() -> [EKEvent] {
-        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
+        guard EKEventStore.authorizationStatus(for: .event).orbitCanReadEvents else { return [] }
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: Date())
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
@@ -203,7 +290,7 @@ final class CalendarService {
     }
 
     func events(on date: Date) -> [EKEvent] {
-        guard EKEventStore.authorizationStatus(for: .event) == .fullAccess else { return [] }
+        guard EKEventStore.authorizationStatus(for: .event).orbitCanReadEvents else { return [] }
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: date)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start
@@ -212,6 +299,28 @@ final class CalendarService {
             if lhs.isAllDay != rhs.isAllDay { return lhs.isAllDay }
             return lhs.startDate < rhs.startDate
         }
+    }
+
+    /// 同一日历、同标题、同开始时间（容差 2 分钟）的日程视为重复；
+    /// 返回已有事件的标识，供上层绑定原日程而不是再次新建。
+    func findDuplicate(of snapshot: EventSnapshot) -> String? {
+        guard EKEventStore.authorizationStatus(for: .event).orbitCanReadEvents,
+              let calendar = store.calendar(withIdentifier: snapshot.calendarIdentifier) else { return nil }
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: snapshot.start)
+        guard let dayEnd = cal.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
+        let predicate = store.predicateForEvents(withStart: dayStart, end: dayEnd, calendars: [calendar])
+        let normalizedTitle = snapshot.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTitle.isEmpty else { return nil }
+        return store.events(matching: predicate).first { event in
+            guard let title = event.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  title == normalizedTitle,
+                  let identifier = event.eventIdentifier else { return false }
+            if snapshot.isAllDay || event.isAllDay {
+                return snapshot.isAllDay && event.isAllDay
+            }
+            return abs(event.startDate.timeIntervalSince(snapshot.start)) < 120
+        }?.eventIdentifier
     }
 
     private func apply(_ snapshot: EventSnapshot, to event: EKEvent, updateRecurrence: Bool) {

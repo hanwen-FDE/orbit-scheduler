@@ -31,10 +31,16 @@ final class RemindersService {
     func ensureAccess() async throws {
         var status = EKEventStore.authorizationStatus(for: .reminder)
         if status == .notDetermined {
-            _ = try await store.requestFullAccessToReminders()
+            if #available(iOS 17.0, *) {
+                _ = try? await store.requestFullAccessToReminders()
+            } else {
+                _ = await withCheckedContinuation { continuation in
+                    store.requestAccess(to: .reminder) { _, _ in continuation.resume() }
+                }
+            }
             status = EKEventStore.authorizationStatus(for: .reminder)
         }
-        guard status == .fullAccess else { throw RemindersServiceError.permissionDenied }
+        guard status.orbitCanUseReminders else { throw RemindersServiceError.permissionDenied }
     }
 
     /// 将一个日历事件同步成同时间的原生提醒事项；已有标识时更新而不是重复创建。

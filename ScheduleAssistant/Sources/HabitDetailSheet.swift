@@ -13,7 +13,7 @@ struct HabitDetailSheet: View {
     @State private var endDate = Calendar.current.date(byAdding: .year, value: 1, to: Date()) ?? Date()
 
     var body: some View {
-        NavigationStack {
+        OrbitNavigationStack {
             Form {
                 Section("习惯") {
                     TextField("例如：吃维生素 D / 睡前阅读", text: $title)
@@ -41,11 +41,12 @@ struct HabitDetailSheet: View {
             }
             .navigationTitle("新增习惯提醒")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(orbitAccent())
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button("取消") { dismiss() }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     Button("保存") {
                         let rule = RecurrenceSpec(
                             frequency: frequency,

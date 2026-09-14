@@ -1,0 +1,20 @@
+[Review Account]
+Username: [TO FILL ONLY IN APP STORE CONNECT — DO NOT COMMIT]
+Password: [TO FILL ONLY IN APP STORE CONNECT — DO NOT COMMIT]
+
+The review account has Orbit test points preloaded. Reviewers do not need to purchase points or configure a personal API key.
+
+[How to Test]
+1. Launch the app, sign in with the review account above, and grant Full Calendar access.
+2. On the chat screen, type: "每周三下午4点在门诊三楼开课题会，提前15分钟提醒" (weekly project meeting, Wed 4 pm, remind 15 min early).
+3. Orbit uses the preloaded cloud points to create an event card. After review, it writes the event into the system Calendar. Tap the card to edit time, recurrence, destination calendar and reminders; swipe left to delete.
+4. You can also send a screenshot containing a schedule to test image recognition, or long-press the microphone button to test live voice transcription.
+
+[Notes]
+• The default flow is an Orbit account with cloud points. Points are consumable in-app purchases. BYOK is an optional advanced setting and is not required for review.
+• The app has login and consumable in-app purchases; it has no subscriptions, ads, or public user-generated content.
+• If Calendar permission is denied, the rest of the app remains browsable (the Today page shows an empty state).
+• Contact: service.orbit@iChatStudio.com
+
+[Usage suggestion]
+Paste the Chinese version first, then this English version below it in the same Review Notes field.

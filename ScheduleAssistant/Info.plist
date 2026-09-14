@@ -77,5 +77,19 @@
 	<string>用于选择包含日程信息的图片</string>
 	<key>NSCameraUsageDescription</key>
 	<string>用于拍摄包含日程信息的图片</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>OrbitBackendBaseURL</key>
+	<string>https://api.example.com</string>
+	<key>OrbitBackendMock</key>
+	<false/>
+	<key>OrbitPointProducts</key>
+	<array>
+		<string>com.itransstudio.orbit.points50</string>
+		<string>com.itransstudio.orbit.points250</string>
+		<string>com.itransstudio.orbit.points600</string>
+	</array>
+	<key>OrbitSupportEmail</key>
+	<string>service.orbit@iChatStudio.com</string>
 </dict>
 </plist>

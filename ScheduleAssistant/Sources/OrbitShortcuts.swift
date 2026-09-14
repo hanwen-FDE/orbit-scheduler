@@ -45,6 +45,8 @@ enum OrbitDeepLink {
 }
 
 /// “快速记录”会打开 App，而不是在后台直接创建日程；用户始终能看到并确认写入结果。
+/// AppIntents 需要 iOS 16；iOS 15 上这些系统入口不可用，但 URL Scheme 与小组件不受影响。
+@available(iOS 16.0, *)
 struct OpenOrbitComposerIntent: AppIntent {
     static var title: LocalizedStringResource = "快速记录日程"
     static let openAppWhenRun: Bool = true
@@ -55,6 +57,7 @@ struct OpenOrbitComposerIntent: AppIntent {
     }
 }
 
+@available(iOS 16.0, *)
 struct OpenOrbitTodayIntent: AppIntent {
     static var title: LocalizedStringResource = "查看今日日程"
     static let openAppWhenRun: Bool = true
@@ -66,6 +69,7 @@ struct OpenOrbitTodayIntent: AppIntent {
 }
 
 /// 系统会将这里声明的入口显示在快捷指令、Siri 和 Spotlight 中。
+@available(iOS 16.0, *)
 struct OrbitShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(

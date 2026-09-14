@@ -1,0 +1,16 @@
+# 密钥配置，绝不提交
+.env
+
+# 依赖
+node_modules/
+
+# 数据库与日志
+data/
+*.log
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# 冒烟测试临时文件
+.tmp/

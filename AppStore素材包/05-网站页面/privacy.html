@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>隐私政策 · Orbit 轨道</title>
+<style>
+:root{--accent:#2F7CF6;--ink:#1a1d26;--muted:#5b6270;--bg:#f7f8fb;--card:#ffffff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--bg);line-height:1.8;font-size:15.5px}
+.wrap{max-width:760px;margin:0 auto;padding:48px 22px 80px}
+h1{font-size:28px;margin-bottom:6px}
+h2{font-size:18.5px;margin:34px 0 10px;padding-left:12px;border-left:4px solid var(--accent)}
+p,li{color:#333a46}
+ul{padding-left:22px;margin:8px 0}
+.meta{color:var(--muted);font-size:13.5px;margin-bottom:8px}
+.card{background:var(--card);border-radius:14px;padding:6px 26px 26px;box-shadow:0 2px 14px rgba(20,30,60,.06);margin-top:18px}
+.hl{background:rgba(47,124,246,.08);border-left:3px solid var(--accent);border-radius:0 10px 10px 0;padding:12px 16px;margin:14px 0;font-size:14.5px}
+footer{margin-top:30px;text-align:center;font-size:13px;color:var(--muted)}
+footer a{color:var(--accent);text-decoration:none;margin:0 8px}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+th,td{border:1px solid #e3e7ee;padding:8px 10px;text-align:left;vertical-align:top}
+th{background:#f0f4fb}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>隐私政策</h1>
+<p class="meta">App：Orbit 轨道（iOS） ｜ 生效日期：2026-09-14 ｜ 最后更新：2026-09-14</p>
+
+<div class="card">
+
+<h2>一、开发者与联系方式</h2>
+<p>Orbit 轨道是一款由个人开发者开发的 iOS 应用。</p>
+<ul>
+	<li>开发者：Hanwen ZHANG</li>
+	<li>联系邮箱：service.orbit@iChatStudio.com</li>
+</ul>
+<p>如对本政策有任何疑问，请通过上述邮箱联系我们。</p>
+
+<h2>二、总原则：最小化处理、不做追踪</h2>
+<div class="hl">Orbit <b>不包含广告、统计分析或第三方追踪 SDK</b>。日程、提醒事项和本地聊天数据优先保存在你的 iPhone；使用 Orbit 云端 AI 时，必要的账户、交易和识别请求会由 Orbit 服务处理，以完成登录、积分和模型调用。</div>
+
+<h2>三、App 使用的系统权限及用途</h2>
+<table>
+	<tr><th>权限</th><th>用途</th></tr>
+	<tr><td>日历（完全访问/写入）</td><td>把你确认的日程写入系统日历；在"今天"页展示与编辑已有日程；检测时间冲突。</td></tr>
+	<tr><td>提醒事项</td><td>在你主动选择"同步到提醒事项"时，把日程或循环习惯写入系统提醒事项。</td></tr>
+	<tr><td>麦克风 与 语音识别</td><td>仅在你按下语音按钮时录音并转写为文字用于识别日程；录音不保存、不上传。</td></tr>
+	<tr><td>相册 / 相机</td><td>仅在你主动选择图片或拍照时读取所选图片（如课程表、会议通知截图），用于识别其中的日程。</td></tr>
+	<tr><td>位置（使用期间）</td><td>仅当你开启"晨间天气"时，用<b>粗略位置</b>获取当地天气（数据由 Apple Weather 提供）；位置信息不上传给任何第三方，也不用于追踪。</td></tr>
+</table>
+
+<h2>四、AI 处理与第三方服务（重要）</h2>
+<p>Orbit 默认采用"账户 + 云端积分"模式：AI 识别由 Orbit 的受限服务端和模型网关提供。高级用户也可选择"自带 Key"（BYOK）路径，使用自己配置的大模型服务商。</p>
+<ul>
+	<li>云端模式会处理用户名、密码哈希、登录令牌、积分余额、购买交易信息，以及你主动提交的文字、语音转写文字或图片，以提供识别服务；</li>
+	<li>模型供应商主密钥只保存于 Orbit 服务端，不会写入 App；</li>
+	<li>当你主动提交识别内容时，内容会经 Orbit 服务发送至受限模型网关；</li>
+	<li>若启用高级 BYOK，用户自己的 API Key 仅保存在 iPhone 系统钥匙串（Keychain）中；你可以随时在设置中更换或删除它。</li>
+</ul>
+<div class="hl">默认情况下登录 Orbit 即可使用云端 AI 积分服务；高级 BYOK 为可选功能，不是普通用户的必经步骤。</div>
+
+<h2>五、本地存储与删除</h2>
+<ul>
+	<li>聊天记录、日程卡片、通知记录保存在本机应用目录；偏好设置保存在系统偏好（UserDefaults）；登录令牌和高级 BYOK API Key 保存在钥匙串。</li>
+	<li><b>卸载 Orbit 即彻底删除上述全部本地数据</b>，无需额外操作。</li>
+	<li>单条数据可在 App 内直接删除对应日程或清空对话。</li>
+</ul>
+
+<h2>六、儿童隐私</h2>
+<p>Orbit 在 App Store 的分级为 4+，不面向儿童设计，也不 knowingly 收集任何儿童的个人信息。</p>
+
+<h2>七、政策变更</h2>
+<p>如政策发生变更，我们会更新本页面的"最后更新"日期。重大变更将通过 App 内提示或本页公告告知。</p>
+
+<h2>八、英文概要（English Summary）</h2>
+<p style="font-size:14px;color:#4a5160">Orbit is an iOS app developed by an individual developer. It contains <b>no ads, analytics, or tracking SDKs</b>. Schedules, reminders, and local chat data remain on your device. The default Orbit account and cloud-points service processes the account identifier, password hash, transaction and balance records, plus the text, voice transcript, or image you actively submit for AI recognition; the request is routed through Orbit's restricted service to an AI gateway. Tokens are stored in the device Keychain. An optional advanced BYOK path stores your personal API key only in the Keychain. With permission, Orbit reads/writes the system calendar and uses speech, camera/photo picker, and coarse location only for the requested feature. Contact: service.orbit@iChatStudio.com.</p>
+
+</div>
+
+<footer>
+	<a href="index.html">首页</a><a href="support.html">帮助与支持</a>
+	<br><span style="display:inline-block;margin-top:8px">© 2026 Orbit 轨道</span>
+</footer>
+</div>
+</body>
+</html>

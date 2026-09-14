@@ -17,6 +17,11 @@ protocol LLMProvider {
     func testConnection(config: LLMProviderConfig) async throws -> Bool
 }
 
+extension LLMProvider {
+    /// Orbit 云端（积分制）不走 BYOK 配置界面。
+    var isCloudService: Bool { id == "orbit-cloud" }
+}
+
 /// 单个服务商的用户配置。API Key 只在运行内存和 Keychain 中保存；
 /// 接口地址与模型名才会进入普通偏好设置。
 struct LLMProviderConfig: Codable, Equatable {
@@ -65,13 +70,14 @@ class OpenAICompatProvider: LLMProvider {
         let model: String
         let messages: [Message]
         let temperature: Double
+        let stream: Bool?
         struct Message: Codable {
             let role: String
             let content: [MessageContent]
         }
     }
 
-    func buildRequestBody(text: String?, image: UIImage?, config: LLMProviderConfig, systemPrompt: String) throws -> Data {
+    func buildRequestBody(text: String?, image: UIImage?, config: LLMProviderConfig, systemPrompt: String, stream: Bool? = nil) throws -> Data {
         var content: [MessageContent] = []
         if let text, !text.isEmpty {
             content.append(.init(type: "text", text: text, image_url: nil))
@@ -86,7 +92,8 @@ class OpenAICompatProvider: LLMProvider {
                 .init(role: "system", content: [.init(type: "text", text: systemPrompt, image_url: nil)]),
                 .init(role: "user", content: content),
             ],
-            temperature: 0.1
+            temperature: 0.1,
+            stream: stream
         )
         let encoder = JSONEncoder()
         return try encoder.encode(body)
@@ -318,7 +325,7 @@ final class LLMSettings: ObservableObject {
     static let shared = LLMSettings()
 
     let providers: [LLMProvider] = [
-        ZhipuProvider(), DeepSeekProvider(), KimiProvider(), QwenProvider(),
+        OrbitCloudProvider(), ZhipuProvider(), DeepSeekProvider(), KimiProvider(), QwenProvider(),
         OpenAIProvider(), CustomCompatProvider()
     ]
 
@@ -334,7 +341,7 @@ final class LLMSettings: ObservableObject {
     }
 
     init() {
-        activeProviderId = defaults.string(forKey: activeKey) ?? "zhipu"
+        activeProviderId = defaults.string(forKey: activeKey) ?? "orbit-cloud"
         var loaded: [String: LLMProviderConfig]
         if let data = defaults.data(forKey: configKey),
            let saved = try? JSONDecoder().decode([String: LLMProviderConfig].self, from: data) {

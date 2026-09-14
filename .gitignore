@@ -1,6 +1,9 @@
 *.zip
+*.ipa
+*.tar.gz
 ScheduleAssistant-ipa/
 ScheduleAssistant-app/
+relatedexefiles/
 build/
 DerivedData/
 .DS_Store

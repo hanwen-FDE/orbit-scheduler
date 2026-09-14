@@ -26,7 +26,14 @@ final class SpeechService: NSObject, ObservableObject {
                 errorMessage = "未获得语音识别权限"
                 return
             }
-            let micGranted = await AVAudioApplication.requestRecordPermission()
+            let micGranted: Bool
+            if #available(iOS 17.0, *) {
+                micGranted = await AVAudioApplication.requestRecordPermission()
+            } else {
+                micGranted = await withCheckedContinuation { continuation in
+                    AVAudioSession.sharedInstance().requestRecordPermission { continuation.resume(returning: $0) }
+                }
+            }
             guard micGranted else {
                 errorMessage = "未获得麦克风权限"
                 return

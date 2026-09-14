@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Orbit 轨道 · AI 日程助手 for iPhone</title>
+<meta name="description" content="Orbit 轨道：一句话、一段语音、一张课程表截图，AI 帮你写进 iPhone 系统日历。原生 SwiftUI，数据留在本机。">
+<style>
+:root{--accent:#2F7CF6;--ink:#1a1d26;--muted:#5b6270;--bg:#f7f8fb;--card:#ffffff;--radius:18px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:var(--ink);background:var(--bg);line-height:1.75}
+.wrap{max-width:860px;margin:0 auto;padding:0 22px}
+header{padding:64px 0 40px;text-align:center}
+.badge{display:inline-block;font-size:13px;color:var(--accent);background:rgba(47,124,246,.1);border-radius:999px;padding:4px 14px;margin-bottom:18px;letter-spacing:.5px}
+h1{font-size:clamp(30px,6vw,44px);line-height:1.25;letter-spacing:-.5px}
+h1 em{font-style:normal;color:var(--accent)}
+.sub{margin-top:14px;font-size:clamp(16px,2.6vw,19px);color:var(--muted)}
+.cta{display:inline-flex;align-items:center;gap:8px;margin-top:28px;background:var(--accent);color:#fff;text-decoration:none;font-size:17px;font-weight:600;padding:13px 30px;border-radius:14px;box-shadow:0 8px 24px rgba(47,124,246,.35)}
+.cta small{font-weight:400;opacity:.85;font-size:12px}
+section{padding:34px 0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+.card{background:var(--card);border-radius:var(--radius);padding:24px 22px;box-shadow:0 2px 14px rgba(20,30,60,.06)}
+.card .ico{font-size:26px}
+.card h3{font-size:17px;margin:10px 0 6px}
+.card p{font-size:14.5px;color:var(--muted)}
+.flow{background:var(--card);border-radius:var(--radius);padding:30px 26px;box-shadow:0 2px 14px rgba(20,30,60,.06)}
+.flow ol{list-style:none;counter-reset:step;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:18px;margin-top:16px}
+.flow li{counter-increment:step;position:relative;padding-left:40px;font-size:14.5px;color:var(--muted)}
+.flow li::before{content:counter(step);position:absolute;left:0;top:1px;width:28px;height:28px;border-radius:50%;background:rgba(47,124,246,.12);color:var(--accent);font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+.flow b{color:var(--ink)}
+.privacy-note{font-size:13.5px;color:var(--muted);background:rgba(47,124,246,.06);border-left:3px solid var(--accent);border-radius:0 12px 12px 0;padding:14px 18px;margin-top:26px}
+footer{padding:40px 0 60px;text-align:center;font-size:13px;color:var(--muted)}
+footer a{color:var(--accent);text-decoration:none;margin:0 10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+	<div class="badge">iOS · 原生 SwiftUI · 写入系统日历</div>
+	<h1>Orbit 轨道<br>把每句话<em>写进日历</em></h1>
+	<p class="sub">一句话、一段语音、一张课程表截图——AI 识别后直接写入 iPhone 系统日历。</p>
+	<a class="cta" href="#download">App Store 下载 <small>（即将上线）</small></a>
+</header>
+
+<section>
+	<div class="grid">
+		<div class="card"><div class="ico">💬</div><h3>三种输入</h3><p>文字、语音实时转写、图片（课程表 / 会议通知 / 排班表截图）都能识别，多行日程一次粘贴批量建。</p></div>
+		<div class="card"><div class="ico">📅</div><h3>写入系统日历</h3><p>不自造日历。识别结果写入苹果日历，Siri、小组件、Apple Watch 提醒全部通用。</p></div>
+		<div class="card"><div class="ico">🔁</div><h3>循环与提醒</h3><p>每周例会、工作日上课、每月复诊；准时到提前 1 天的多档提醒，卡片上一键改。</p></div>
+		<div class="card"><div class="ico">⚡</div><h3>冲突建议</h3><p>与已有日程冲突时给出可采用的空档建议，绝不擅自挪动你的日程。</p></div>
+		<div class="card"><div class="ico">🌤️</div><h3>晨间简报</h3><p>今天安排 + 本地天气 + 一句问候，可设每天定时通知。</p></div>
+		<div class="card"><div class="ico">🪐</div><h3>Orbit 云端积分</h3><p>登录 Orbit 即可使用云端 AI 识别，按积分使用；高级用户仍可在设置中选择自己的 API Key。</p></div>
+	</div>
+</section>
+
+<section>
+	<div class="flow">
+		<h2 style="font-size:20px">三步上手</h2>
+		<ol>
+			<li><span><b>说一句</b><br>"下周三下午 4 点在门诊三楼开课题会"</span></li>
+			<li><span><b>AI 核对</b><br>生成可编辑的日程卡片，时间、地点、循环规则一目了然</span></li>
+			<li><span><b>写入日历</b><br>确认后写入苹果系统日历，提醒准时响</span></li>
+		</ol>
+		<div class="privacy-note">隐私：Orbit 不含广告与追踪 SDK。日程仍写入你的系统日历；使用云端 AI 时，输入内容经 Orbit 服务与受限模型网关处理。详见<a href="privacy.html">隐私政策</a>。</div>
+	</div>
+</section>
+
+<section id="download">
+	<div class="card" style="text-align:center;padding:36px 24px">
+		<h2 style="font-size:22px;margin-bottom:8px">iPhone · iOS 15 或更新版本</h2>
+		<p style="color:var(--muted);font-size:14.5px">App Store 上线后此处将附直接下载链接。</p>
+	</div>
+</section>
+
+<footer>
+	<a href="index.html">首页</a><a href="support.html">帮助与支持</a><a href="privacy.html">隐私政策</a>
+	<br><span style="display:inline-block;margin-top:10px">© 2026 Orbit 轨道 · Hanwen ZHANG · <a href="mailto:service.orbit@iChatStudio.com" style="margin:0">service.orbit@iChatStudio.com</a></span>
+	<br><span id="icp" style="display:none"></span>
+</footer>
+</div>
+</body>
+</html>

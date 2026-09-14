@@ -41,14 +41,10 @@ struct UsageGuideView: View {
                 section("④ 主题配色", """
 左上角 Orbit →「主题配色」可选择蓝、黄、紫、浅绿、深绿和深紫蓝黑；App 内按钮和卡片强调色会即时跟随。
 """)
-                section("⑤ 设置 API Key", """
-AI 识别需要大模型的 API Key：
+                section("⑤ AI 识别与积分", """
+默认使用「Orbit 云端」识别服务：注册 / 登录账号后自动领取对话令牌，按积分计费；余额在「左上角头像 → 我的」查看，积分不足时到「积分商店」充值即可。
 
-1. 左上角头像 → 设置 → AI 识别
-2. 选择服务商（智谱、DeepSeek、Kimi、通义千问、OpenAI 均已预设接口地址和默认模型）
-3. 粘贴 API Key → 点「测试连接」，显示 ✓ 即成功
-
-高级用户可在同一页修改接口地址和模型名，或选“自定义（OpenAI 兼容）”。API Key 保存在本机 iPhone Keychain 中。
+高级用户可在「设置 → 高级 → 自定义模型服务」切换为自己的 API Key（智谱、DeepSeek、Kimi、通义千问、OpenAI 或任意 OpenAI 兼容接口），Key 保存在本机 iPhone Keychain 中。
 """)
                 section("⑥ 简报设置", """
 晨报、晚报均可在左上角 Orbit →「每日播报」中分别开启，并直接选择每天的推送时间。
@@ -56,7 +52,7 @@ AI 识别需要大模型的 API Key：
 晨报会汇总天气（可选）、今天的安排和冲突；晚报会总结今天的安排情况。
 """)
                 section("⑦ 通知与跳转", """
-右上角铃铛保存日程提醒、每日简报、时间冲突等信息；点击通知条目可直接跳转到对应的日程卡片进行修改。
+右上角铃铛保存日程提醒、每日简报、时间冲突等信息；点击通知条目可直接跳转——日程类会打开对应卡片，简报类会定位到对话页里的那张简报卡片（带高亮描边）。
 
 对话页左上角返回按钮可回到“今天”页，按时间轴展示 Apple 日历中的当天安排，可左右翻页查看前后几天。
 """)
@@ -294,8 +290,7 @@ struct OnboardingView: View {
     /// 日历授权状态行：未决定 → 请求；被拒 → 去系统设置；已授权 → 绿色对勾。
     @ViewBuilder
     private var calendarStatusRow: some View {
-        switch calendarStatus {
-        case .fullAccess, .writeOnly:
+        if calendarStatus.orbitCanWriteEvents {
             let calendars = CalendarService.shared.availableCalendars()
             VStack(spacing: 14) {
                 Label("已连接 Apple 日历", systemImage: "checkmark.circle.fill")
@@ -316,7 +311,7 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-        case .denied, .restricted:
+        } else if calendarStatus == .denied || calendarStatus == .restricted {
             VStack(spacing: 10) {
                 Label("日历权限未开启", systemImage: "exclamationmark.circle")
                     .font(.headline)
@@ -332,7 +327,7 @@ struct OnboardingView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(orbitAccent())
             }
-        case .notDetermined:
+        } else {
             Button {
                 Task {
                     _ = await CalendarService.shared.ensureAccess()
@@ -345,8 +340,6 @@ struct OnboardingView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(orbitAccent())
-        @unknown default:
-            EmptyView()
         }
     }
 

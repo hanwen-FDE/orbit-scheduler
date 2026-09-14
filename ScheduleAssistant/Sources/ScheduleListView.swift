@@ -17,6 +17,20 @@ final class OrbitNotificationStore: ObservableObject {
            let saved = try? JSONDecoder().decode([OrbitNotificationItem].self, from: data) {
             items = saved
         }
+        // iCloud 同步拉到较新的数据后热加载通知记录。
+        NotificationCenter.default.addObserver(
+            forName: .orbitSyncDidPull, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.reloadFromDisk() }
+        }
+    }
+
+    /// 供 iCloud 同步后从磁盘重新读取。
+    func reloadFromDisk() {
+        if let data = try? Data(contentsOf: fileURL),
+           let saved = try? JSONDecoder().decode([OrbitNotificationItem].self, from: data) {
+            items = saved
+        }
     }
 
     var unreadCount: Int { items.filter { !$0.isRead }.count }
@@ -85,7 +99,7 @@ struct OrbitNotificationCenterView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
+        OrbitNavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
                     groupEntry(title: "通知",
@@ -103,9 +117,10 @@ struct OrbitNotificationCenterView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("消息")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(orbitAccent())
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("关闭") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarLeading) { Button("关闭") { dismiss() } }
+                ToolbarItem(placement: .navigationBarTrailing) {
                     if store.unreadCount > 0 { Button("全部已读") { store.markAllRead() } }
                 }
             }
@@ -119,18 +134,16 @@ struct OrbitNotificationCenterView: View {
         items: [OrbitNotificationItem],
         emptyHint: String
     ) -> some View {
-        NavigationLink {
-            NotificationGroupListView(
-                title: title,
-                showsBriefings: showsBriefings,
-                onOpenMessage: { messageId in
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        chat.pendingFocusMessageId = messageId
-                    }
+        NavigationLink(destination: NotificationGroupListView(
+            title: title,
+            showsBriefings: showsBriefings,
+            onOpenMessage: { messageId in
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    chat.pendingFocusMessageId = messageId
                 }
-            )
-        } label: {
+            }
+        )) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
                     Text(title)
@@ -139,7 +152,7 @@ struct OrbitNotificationCenterView: View {
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.subheadline.bold())
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(orbitAccent().opacity(0.6))
                 }
                 if let latest = items.first {
                     Text(latest.detail)
@@ -190,7 +203,7 @@ struct NotificationGroupListView: View {
     var body: some View {
         Group {
             if items.isEmpty {
-                ContentUnavailableView("暂无记录", systemImage: "tray", description: Text("新的内容出现后会在这里逐条显示。"))
+                OrbitUnavailableView(title: "暂无记录", systemImage: "tray", description: "新的内容出现后会在这里逐条显示。")
             } else {
                 List {
                     ForEach(items) { item in
@@ -228,6 +241,7 @@ struct NotificationGroupListView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .tint(orbitAccent())
     }
 
     private func color(for kind: OrbitNotificationKind) -> Color {
@@ -249,18 +263,19 @@ struct TodayScheduleView: View {
     @State private var showNotifications = false
     @State private var showDrawer = false
     @State private var eventToDelete: EKEvent?
+    @State private var deleteErrorText: String?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
-            NavigationStack {
+            OrbitNavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
                     daySelector
                     if events.isEmpty {
-                        ContentUnavailableView(
-                            "今天暂无安排",
+                        OrbitUnavailableView(
+                            title: "今天暂无安排",
                             systemImage: "calendar.badge.plus",
-                            description: Text("切换到“对话”，告诉 Orbit 你想安排什么。")
+                            description: "切换到“对话”，告诉 Orbit 你想安排什么。"
                         )
                         .padding(.top, 80)
                     } else {
@@ -289,12 +304,12 @@ struct TodayScheduleView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .navigationBarLeading) {
                     Button { showDrawer = true } label: {
                         OrbitBrandMark()
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     NotificationBellButton(isPresented: $showNotifications)
                 }
             }
@@ -305,7 +320,15 @@ struct TodayScheduleView: View {
             ), titleVisibility: .visible) {
                 Button("删除日程", role: .destructive) {
                     if let event = eventToDelete {
-                        CalendarService.shared.deleteEvent(snapshot: Self.snapshot(of: event))
+                        if case .failure(let error) = CalendarService.shared.deleteEvent(snapshot: Self.snapshot(of: event)) {
+                            // 只读日历、账户异常等情况下删除会失败，必须如实告知。
+                            deleteErrorText = error.localizedDescription
+                            OrbitNotificationStore.shared.add(
+                                kind: .writeFailure,
+                                title: "日历删除失败",
+                                detail: "《\(event.title ?? "未命名日程")》删除失败：\(error.localizedDescription)"
+                            )
+                        }
                         Task { await refresh() }
                     }
                     eventToDelete = nil
@@ -314,11 +337,19 @@ struct TodayScheduleView: View {
             } message: {
                 Text("它会同时从系统日历中删除。")
             }
+            .alert("删除失败", isPresented: Binding(
+                get: { deleteErrorText != nil },
+                set: { if !$0 { deleteErrorText = nil } }
+            )) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(deleteErrorText ?? "")
+            }
             .sheet(isPresented: $showNotifications) { OrbitNotificationCenterView() }
             .sheet(isPresented: $showDrawer) { SideDrawerView() }
             .task { await refresh() }
-            .onChange(of: selectedDay) { _, _ in Task { await refresh() } }
-            .onChange(of: scenePhase) { _, phase in if phase == .active { Task { await refresh() } } }
+            .onChange(of: selectedDay) { _ in Task { await refresh() } }
+            .onChange(of: scenePhase) { phase in if phase == .active { Task { await refresh() } } }
             chatBubble
         }
     }
@@ -535,6 +566,8 @@ struct EKEventEditor: View {
     @State private var location: String
     @State private var start: Date
     @State private var end: Date
+    @State private var saveErrorText: String?
+    @State private var showRecurrenceSpanOptions = false
 
     init(event: EKEvent, onDone: @escaping () -> Void) {
         self.event = event
@@ -546,7 +579,7 @@ struct EKEventEditor: View {
     }
 
     var body: some View {
-        NavigationStack {
+        OrbitNavigationStack {
             Form {
                 Section("日程") {
                     TextField("标题", text: $title)
@@ -564,21 +597,49 @@ struct EKEventEditor: View {
             }
             .navigationTitle("编辑日程")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(orbitAccent())
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .navigationBarLeading) { Button("取消") { dismiss() } }
             }
         }
-        .presentationDetents([.large])
         .orbitEdgeSwipeBack { dismiss() }
+        .confirmationDialog("这是一个循环日程", isPresented: $showRecurrenceSpanOptions, titleVisibility: .visible) {
+            Button("只改这一次") { applyEdits(span: .thisEvent) }
+            Button("改这一次及后续") { applyEdits(span: .futureEvents) }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("选择修改影响的范围，避免误改整个系列。")
+        }
+        .alert("保存失败", isPresented: Binding(
+            get: { saveErrorText != nil },
+            set: { if !$0 { saveErrorText = nil } }
+        )) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text(saveErrorText ?? "")
+        }
     }
 
     private func save() {
+        // 循环日程必须先问影响范围；单次日程直接保存。
+        if event.hasRecurrenceRules {
+            showRecurrenceSpanOptions = true
+        } else {
+            applyEdits(span: nil)
+        }
+    }
+
+    private func applyEdits(span: EKSpan?) {
         var snap = TodayScheduleView.snapshot(of: event)
         snap.title = title.trimmingCharacters(in: .whitespaces)
         snap.location = location.isEmpty ? nil : location
         snap.start = start
         snap.end = end <= start ? start.addingTimeInterval(3600) : end
-        CalendarService.shared.updateEvent(&snap)
+        if case .failure(let error) = CalendarService.shared.updateEvent(&snap, span: span) {
+            // 保存失败时停留在编辑页，不关闭、不回调，让用户重试或取消。
+            saveErrorText = error.localizedDescription
+            return
+        }
         dismiss()
         onDone()
     }

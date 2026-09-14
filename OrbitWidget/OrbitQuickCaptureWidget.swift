@@ -40,7 +40,7 @@ private struct OrbitQuickCaptureWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        Link(destination: URL(string: "orbit://compose")!) {
+        let content = Link(destination: URL(string: "orbit://compose")!) {
             HStack(spacing: 12) {
                 Image(systemName: "sparkles")
                     .font(.system(size: family == .systemSmall ? 28 : 34, weight: .semibold))
@@ -70,8 +70,13 @@ private struct OrbitQuickCaptureWidgetView: View {
             }
             .padding()
         }
-        .containerBackground(for: .widget) {
-            Color.indigo.opacity(0.08)
+        // containerBackground 是 iOS 17 API；iOS 15/16 直接铺背景色。
+        if #available(iOS 17.0, *) {
+            content.containerBackground(for: .widget) {
+                Color.indigo.opacity(0.08)
+            }
+        } else {
+            content.background(Color.indigo.opacity(0.08))
         }
     }
 }

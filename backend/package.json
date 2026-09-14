@@ -1,0 +1,22 @@
+{
+  "name": "orbit-points-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Orbit iOS App 积分后端：账号/JWT、苹果 IAP 收据校验、OneAPI 积分管理、退款处理（不处理对话请求）",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "smoke": "node scripts/smoke.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

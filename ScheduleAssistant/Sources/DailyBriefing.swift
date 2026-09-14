@@ -100,6 +100,13 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     private func loadWeather(for location: CLLocation) async {
+        guard #available(iOS 16.0, *) else {
+            // WeatherKit 需要 iOS 16；旧系统上明确降级而不是报错。
+            weatherText = "本地天气需要 iOS 16 或更新系统"
+            weatherSymbolName = "cloud.sun"
+            isLoadingWeather = false
+            return
+        }
         do {
             let weather = try await WeatherService.shared.weather(for: location)
             let celsius = weather.currentWeather.temperature.converted(to: .celsius).value
@@ -111,6 +118,7 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         isLoadingWeather = false
     }
 
+    /// 打开 App 当下的问候（卡片顶部用）。
     var greeting: String {
         let hour = Calendar.current.component(.hour, from: Date())
         switch hour {
@@ -118,6 +126,16 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         case 11..<14: return "中午好"
         case 14..<19: return "下午好"
         default: return "晚上好"
+        }
+    }
+
+    /// 早报问候按“设定的推送时间”推算，而不是生成简报那一刻的钟点——
+    /// 否则下午打开 App 时，早报第一句会错写成“下午好”。
+    static func greeting(forScheduledHour hour: Int) -> String {
+        switch hour {
+        case ..<11: return "早上好"
+        case 11..<14: return "中午好"
+        default: return "下午好"
         }
     }
 
@@ -140,6 +158,40 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         ]
         let day = Calendar.current.ordinality(of: .day, in: .year, for: Date()) ?? 0
         return messages[day % messages.count]
+    }
+
+    /// “最早几点、最晚几点”的一天跨度摘要（只统计有具体时间的日程）。
+    var daySpanSummary: String? {
+        let timed = todayEvents.filter { !$0.isAllDay }
+        guard let earliest = timed.min(by: { $0.start < $1.start }),
+              let latest = timed.max(by: { $0.end < $1.end }) else { return nil }
+        return "最早 \(earliest.start.shortTime)《\(earliest.title)》，最晚到 \(latest.end.shortTime)《\(latest.title)》结束"
+    }
+
+    /// 早报结尾的加油语：按日期轮换，同一天内多次刷新不变。
+    static func cheerLine(for date: Date) -> String {
+        let lines = [
+            "今天也要加油呀，一件一件来。",
+            "先做最重要的那件事，其余都会跟上。",
+            "把节奏握在自己手里，就是在前进。",
+            "别怕慢，就怕站；开始五分钟就赢了一半。",
+            "留一点空隙给自己，灵感喜欢空格。",
+            "完成比完美更重要，踏实走完今天。"
+        ]
+        let day = Calendar.current.ordinality(of: .day, in: .year, for: date) ?? 0
+        return lines[day % lines.count]
+    }
+
+    /// 晚报结尾的晚安语：同样按日期轮换。
+    static func goodnightLine(for date: Date) -> String {
+        let lines = [
+            "今天辛苦了，好好休息。",
+            "晚安，明天轨道上见。",
+            "放下手机，睡个安稳觉。",
+            "今天的完成度已经足够好，晚安。"
+        ]
+        let day = Calendar.current.ordinality(of: .day, in: .year, for: date) ?? 0
+        return lines[day % lines.count]
     }
 }
 
