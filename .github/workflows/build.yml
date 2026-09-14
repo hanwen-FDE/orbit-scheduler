@@ -169,6 +169,7 @@ jobs:
             -derivedDataPath build \
             -archivePath build/Orbit.xcarchive \
             DEVELOPMENT_TEAM="$ASC_TEAM_ID" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             archive
 
