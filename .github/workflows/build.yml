@@ -138,6 +138,26 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
           xcodebuild -version
 
+      - name: 导入固定分发证书（未配置则跳过，走云端自动创建）
+        env:
+          SIGNING_CERT_P12: ${{ secrets.SIGNING_CERT_P12 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+        run: |
+          if [ -z "$SIGNING_CERT_P12" ]; then
+            echo "::notice::未配置 SIGNING_CERT_P12，将由云端签名自动创建分发证书"
+            exit 0
+          fi
+          printf '%s' "$SIGNING_CERT_P12" | base64 --decode > /tmp/cert.p12
+          KEYCHAIN=signing.keychain-db
+          security create-keychain -p "ci-keychain" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          security default-keychain -s "$KEYCHAIN"
+          security unlock-keychain -p "ci-keychain" "$KEYCHAIN"
+          security import /tmp/cert.p12 -k "$KEYCHAIN" -P "$SIGNING_CERT_PASSWORD" -A
+          security set-key-partition-list -S apple-tool:,apple: -k "ci-keychain" "$KEYCHAIN"
+          rm /tmp/cert.p12
+          security find-identity -v -p codesigning
+
       - name: 编译（无签名归档，签名和描述文件在导出阶段由云端完成）
         run: |
           xcodebuild \
