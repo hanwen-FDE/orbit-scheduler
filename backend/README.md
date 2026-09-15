@@ -16,6 +16,7 @@ iOS App ──AI流式对话(sk令牌, SSE)────────> OneAPI(Dock
 | 需求 | 实现 |
 |---|---|
 | 用户注册登录、JWT 鉴权 | 用户名+密码（bcrypt 哈希），JWT 有效期默认 7 天 |
+| Sign in with Apple | `POST /api/auth/apple`：identityToken 用苹果公钥验签，按 `sub` 复用/建账号，原始令牌不落库 |
 | 苹果 IAP 消耗型收据校验 | 经典 verifyReceipt 接口；先打生产，返回 21007 自动改沙盒；校验 bundle_id |
 | 校验成功加积分 | 调 OneAPI 管理接口给用户专属子账户加 quota；`transaction_id` 唯一索引保证重复收据不重复加点 |
 | 退款处理 | App Store Server Notifications V2 回调，用苹果根证书验证 JWS 签名链，按交易号扣回积分并标记订单 |

@@ -177,20 +177,50 @@ function startOneApiStub() {
   const app = express();
   app.use(express.json());
 
-  const users = new Map(); // id -> {id, username, quota}
+  const users = new Map(); // id -> {id, username, password, quota}
   const tokens = [];       // {id, name, user_id, key}
+  const sessions = new Map(); // session id -> userId（模拟登录会话）
   let nextUserId = 100;
   let nextTokenId = 200;
   const authOk = (req) => req.get('Authorization') === 'Bearer smoke-oneapi-token';
+  const sessionUser = (req) => {
+    const m = String(req.get('cookie') || '').match(/session=([^\s;]+)/);
+    return m ? sessions.get(m[1]) : undefined;
+  };
 
+  // 模拟真实 one-api 的权限模型：
+  //   用户/额度管理接口要管理员令牌；令牌接口要“本人登录会话”（自签语义，
+  //   管理员令牌替签的令牌会挂错人）；登录和 status 对外开放。
   app.use('/api', (req, res, next) => {
+    if (req.path === '/status' || req.path === '/user/login') { next(); return; }
+    if (req.path.startsWith('/token')) {
+      const uid = sessionUser(req);
+      if (!uid) { res.status(401).json({ success: false, message: '未登录' }); return; }
+      req.stubUserId = uid;
+      next();
+      return;
+    }
     if (!authOk(req)) { res.status(401).json({ success: false, message: '无权限' }); return; }
     next();
   });
 
+  // 子账户登录：校验通过后发 session cookie（后端签令牌前先走这里）
+  app.post('/api/user/login', (req, res) => {
+    const { username, password } = req.body || {};
+    const u = [...users.values()].find((x) => x.username === username);
+    if (!u || u.password !== password) {
+      res.json({ success: false, message: '用户名或密码错误' });
+      return;
+    }
+    const sid = `sess-${crypto.randomBytes(8).toString('hex')}`;
+    sessions.set(sid, u.id);
+    res.setHeader('Set-Cookie', `session=${sid}; Path=/; HttpOnly`);
+    res.json({ success: true, message: '', data: { id: u.id, username: u.username } });
+  });
+
   app.post('/api/user/', (req, res) => {
     const id = ++nextUserId;
-    users.set(id, { id, username: req.body.username, quota: 0 });
+    users.set(id, { id, username: req.body.username, password: req.body.password, quota: 0 });
     res.json({ success: true, message: '' });
   });
 
@@ -209,14 +239,16 @@ function startOneApiStub() {
     const u = users.get(Number(req.body.id));
     if (!u) { res.json({ success: false, message: '用户不存在' }); return; }
     if (typeof req.body.quota === 'number') u.quota = req.body.quota;
+    if (typeof req.body.password === 'string' && req.body.password) u.password = req.body.password;
     res.json({ success: true, message: '' });
   });
 
+  // 自签语义：令牌一律挂到“当前登录会话”的用户名下，body 里的 user_id 被无视
   app.post('/api/token/', (req, res) => {
     const token = {
       id: ++nextTokenId,
       name: req.body.name,
-      user_id: Number(req.body.user_id),
+      user_id: req.stubUserId,
       key: crypto.randomBytes(24).toString('hex'),
     };
     tokens.push(token);
@@ -224,7 +256,7 @@ function startOneApiStub() {
   });
 
   app.get('/api/token/search', (req, res) => {
-    const items = tokens.filter((t) => t.name.includes(req.query.keyword || ''));
+    const items = tokens.filter((t) => t.user_id === req.stubUserId && t.name.includes(req.query.keyword || ''));
     res.json({ success: true, data: { items } });
   });
 

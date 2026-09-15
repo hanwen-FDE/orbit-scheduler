@@ -18,6 +18,8 @@
 | `AUTH_FAILED` | 401 | 用户名或密码错误 |
 | `AUTH_MISSING` / `AUTH_INVALID` | 401 | 未带令牌 / 令牌无效或过期 |
 | `AUTH_DISABLED` | 403 | 账号已被禁用 |
+| `APPLE_TOKEN_INVALID` | 401 | Apple 登录凭证无效或已过期 |
+| `APPLE_AUTH_UNAVAILABLE` | 503 | 苹果登录验证服务暂不可达 |
 | `RECEIPT_INVALID` | 400 | 苹果收据校验未通过（信息里会带原因） |
 | `RECEIPT_BUNDLE_MISMATCH` | 400 | 收据不属于本 App |
 | `NOTIFY_INVALID` | 401 | 苹果通知验签失败 |
@@ -56,6 +58,24 @@
 ```
 
 成功（200）：响应同注册。令牌默认 7 天有效，过期重新登录。
+
+### 2.1 通过 Apple 登录（iOS 端推荐方式）
+
+`POST BASE/api/auth/apple`
+
+```json
+{
+  "identity_token": "<ASAuthorizationAppleIDCredential.identityToken 转字符串>",
+  "full_name": "张三"
+}
+```
+
+- `full_name` 可选，仅在 Apple 首次授权提供姓名时传；后端只用于展示，绝不覆盖已有资料
+- 成功（200）：响应同注册（`token` + `user`）
+- 服务端行为：用 `https://appleid.apple.com/auth/keys` 的公钥验签 identity_token（校验签名、`iss`、`aud`=`APPLE_BUNDLE_ID`、有效期），通过后按苹果 `sub` 标识复用或创建账号；**原始 identity_token 不落库**
+- 同一个 Apple ID（含换邮箱、隐藏邮箱）永远回到同一个 Orbit 账号
+- 前提：Apple Developer 后台已为该 App ID 开启 Sign in with Apple 能力
+- 错误码：`APPLE_TOKEN_INVALID`（401，凭证无效或过期，提示用户重试）、`APPLE_AUTH_UNAVAILABLE`（503，苹果公钥服务暂不可达）
 
 ## 3. 个人信息
 

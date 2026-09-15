@@ -74,6 +74,10 @@ function ensureUserColumn(name, definition) {
 ensureUserColumn('apple_subject', 'TEXT');
 ensureUserColumn('apple_email', 'TEXT');
 ensureUserColumn('display_name', 'TEXT');
+// OneAPI 子账户登录凭证：签发对话令牌时必须以子账户身份登录（令牌接口是
+// “自签”语义）。这是机器账号的随机凭证，不涉及任何真人密码。
+ensureUserColumn('oneapi_ios_username', 'TEXT');
+ensureUserColumn('oneapi_ios_password', 'TEXT');
 db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_subject ON users(apple_subject) WHERE apple_subject IS NOT NULL');
 
 logger.info('db_ready', { path: config.databasePath });

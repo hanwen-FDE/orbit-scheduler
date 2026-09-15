@@ -124,9 +124,13 @@ function withUserLock(userId, fn) {
   const prev = walletLocks.get(userId) || Promise.resolve();
   const next = prev.catch(() => {}).then(fn);
   walletLocks.set(userId, next);
-  next.finally(() => {
-    if (walletLocks.get(userId) === next) walletLocks.delete(userId);
-  });
+  // 注意在“已捕获”的副本上做清理：直接对 next 调 finally 会产生一条
+  // 无人处理的 rejected promise（曾表现为 unhandled_rejection 日志噪音）。
+  next
+    .catch(() => {})
+    .finally(() => {
+      if (walletLocks.get(userId) === next) walletLocks.delete(userId);
+    });
   return next;
 }
 
@@ -138,14 +142,36 @@ async function ensureIosWallet(user) {
     const fresh = findById(user.id);
     if (fresh.oneapi_ios_user_id) return fresh;
 
-    const oneapiUserId = await oneapi.createUser(`orbit_uid_${user.id}`);
+    // username/password 必须存库：签发对话令牌时要用子账户身份登录
+    const account = await oneapi.createUser(`orbit_uid_${user.id}`);
     db.prepare(
-      `UPDATE users SET oneapi_ios_user_id = ?, updated_at = datetime('now')
+      `UPDATE users SET oneapi_ios_user_id = ?, oneapi_ios_username = ?, oneapi_ios_password = ?,
+         updated_at = datetime('now')
        WHERE id = ? AND oneapi_ios_user_id IS NULL`
-    ).run(oneapiUserId, user.id);
-    logger.info('ios_wallet_provisioned', { user_id: user.id, oneapi_user_id: oneapiUserId });
+    ).run(account.id, account.username, account.password, user.id);
+    logger.info('ios_wallet_provisioned', { user_id: user.id, oneapi_user_id: account.id });
     return findById(user.id);
   });
+}
+
+// 存量钱包补录：旧版部署建的钱包没存登录凭证（当时密码生成后即丢弃）。
+// 用管理员接口读回用户名、重置一个新密码，存库后即可走正常的签令牌流程。
+async function ensureWalletCredentials(user) {
+  if (user.oneapi_ios_username && user.oneapi_ios_password) return user;
+
+  const info = await oneapi.getUser(user.oneapi_ios_user_id);
+  const username = info?.username;
+  if (!username) {
+    throw new ApiError('ONEAPI_ERROR', '无法读取 OneAPI 子账户信息以补录凭证', 502);
+  }
+  const password = oneapi.randomPassword();
+  await oneapi.resetUserPassword(user.oneapi_ios_user_id, password);
+  db.prepare(
+    `UPDATE users SET oneapi_ios_username = ?, oneapi_ios_password = ?, updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(username, password, user.id);
+  logger.info('ios_wallet_credentials_restored', { user_id: user.id, oneapi_user_id: user.oneapi_ios_user_id });
+  return findById(user.id);
 }
 
 // 查询 iOS 钱包实时积分（未开户返回 0）
@@ -159,11 +185,19 @@ async function getIosPoints(user) {
 // 领取对话令牌：已有就复用，没有就签发（对应需求 6，App 直连 OneAPI）
 // ---------------------------------------------------------------------
 async function issueApiKey(user) {
-  const walletUser = await ensureIosWallet(user);
+  let walletUser = await ensureIosWallet(user);
+  walletUser = await ensureWalletCredentials(walletUser);
   if (walletUser.oneapi_ios_token_key) {
     return { key: walletUser.oneapi_ios_token_key, id: walletUser.oneapi_ios_token_id };
   }
-  const token = await oneapi.createToken(walletUser.oneapi_ios_user_id, `orbit_uid_${user.id}`);
+  // 令牌必须以子账户自己的身份签发（管理员替签会挂在管理员名下，
+  // 花错人的额度）——oneapi.createToken 内部会先登录再创建。
+  const token = await oneapi.createToken(
+    walletUser.oneapi_ios_user_id,
+    `orbit_uid_${user.id}`,
+    walletUser.oneapi_ios_username,
+    walletUser.oneapi_ios_password
+  );
   db.prepare(
     `UPDATE users SET oneapi_ios_token_id = ?, oneapi_ios_token_key = ?, updated_at = datetime('now') WHERE id = ?`
   ).run(token.id, token.key, user.id);
@@ -172,5 +206,5 @@ async function issueApiKey(user) {
 
 module.exports = {
   publicUser, register, login, loginWithApple, findById, bootstrapAdmin,
-  ensureIosWallet, getIosPoints, issueApiKey, validateCredentials,
+  ensureIosWallet, ensureWalletCredentials, getIosPoints, issueApiKey, validateCredentials,
 };
