@@ -211,7 +211,7 @@ struct SideDrawerView: View {
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Text(app.defaultCalendarId.flatMap(CalendarService.shared.calendarName) ?? "未选择")
+                        Text(app.defaultCalendarId.flatMap(CalendarService.shared.calendarTitle) ?? "未选择")
                             .lineLimit(1)
                         Image(systemName: "chevron.up.chevron.down").font(.caption2)
                     }
