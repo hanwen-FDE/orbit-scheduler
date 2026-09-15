@@ -57,4 +57,37 @@ router.post('/users/:id/grant', asyncHandler(async (req, res) => {
   res.json(result);
 }));
 
+// GET /api/admin/find?username=xxx —— 管理台用：按用户名/昵称查人 + iOS 钱包余额
+router.get('/find', asyncHandler(async (req, res) => {
+  const username = String(req.query.username || '').trim();
+  if (!username) throw new ApiError('BAD_PARAM', '缺少 username 参数', 400);
+  const user = db.prepare(
+    'SELECT * FROM users WHERE username = ? OR display_name = ?'
+  ).get(username, username);
+  if (!user) throw new ApiError('USER_NOT_FOUND', '用户不存在', 404);
+  const iosPoints = await users.getIosPoints(user);
+  res.json({
+    user: { ...users.publicUser(user), status: user.status, created_at: user.created_at },
+    ios_wallet: { oneapi_user_id: user.oneapi_ios_user_id, points: iosPoints },
+  });
+}));
+
+// GET /api/admin/ops?user_id=&limit= —— 管理台用：某用户的积分流水
+router.get('/ops', asyncHandler(async (req, res) => {
+  const userId = Number(req.query.user_id);
+  if (!Number.isInteger(userId) || userId <= 0) throw new ApiError('BAD_PARAM', '缺少 user_id 参数', 400);
+  const rows = db.prepare(
+    'SELECT id, wallet, delta_points, reason, oneapi_quota_before, oneapi_quota_after, created_at FROM quota_ops WHERE user_id = ? ORDER BY id DESC LIMIT ?'
+  ).all(userId, Math.min(Number(req.query.limit) || 50, 200));
+  res.json({ ops: rows });
+}));
+
+// GET /api/admin/recent-users?limit= —— 管理台用：最近注册的用户，方便挑人
+router.get('/recent-users', asyncHandler(async (req, res) => {
+  const rows = db.prepare(
+    'SELECT id, username, display_name, created_at FROM users ORDER BY id DESC LIMIT ?'
+  ).all(Math.min(Number(req.query.limit) || 20, 100));
+  res.json({ users: rows });
+}));
+
 module.exports = router;

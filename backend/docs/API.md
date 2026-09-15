@@ -186,6 +186,29 @@ iOS 端取收据：`Bundle.main.appStoreReceiptURL` 读文件后 base64。
 
 ## 管理接口（需管理员登录令牌）
 
+### 0. 积分管理台（网页）
+
+`GET BASE/api/admin/console` —— 静态网页，浏览器打开后用管理员账号登录即可查用户、加/扣积分、看订单与流水。页面调用的都是下面这些管理员接口。
+
+### 12.1 按用户名查用户
+
+`GET BASE/api/admin/find?username=<用户名或昵称>`
+
+```json
+{
+  "user": { "id": 12, "username": "ceshiyonghu", "role": "user", "status": "active", "created_at": "..." },
+  "ios_wallet": { "oneapi_user_id": 103, "points": 50 }
+}
+```
+
+### 12.2 某用户积分流水
+
+`GET BASE/api/admin/ops?user_id=<ID>&limit=50`
+
+### 12.3 最近注册用户
+
+`GET BASE/api/admin/recent-users?limit=20`
+
 ### 9. 订单列表
 
 `GET BASE/api/admin/orders?status=&user_id=&limit=`

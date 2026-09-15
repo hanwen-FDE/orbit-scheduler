@@ -171,7 +171,19 @@ docker compose up -d --build
 sqlite3 ./data/orbit-points.db ".backup '/opt/orbit-points/backup-$(date +%F).db'"
 ```
 
-管理员操作（用 ADMIN_USERNAME 登录拿 token，详见 docs/API.md）：
+### 积分管理台（网页版，日常管理用它）
+
+浏览器打开 **`https://你的域名:8443/api/admin/console`**（同一域名，即 nginx 入口），
+用 `.env` 里的 `ADMIN_USERNAME` / `ADMIN_PASSWORD` 登录，可：
+
+- 按用户名/昵称查用户，看实时积分与 OneAPI 钱包
+- 一键加/扣积分（正数加、负数扣，自动记流水）
+- 看某用户的内购订单与全部最近订单
+- 看某用户的积分流水（quota 前后值）
+
+页面本身无需鉴权，但页面调用的每个接口都要求管理员令牌，接口清单见 docs/API.md。
+
+命令行的等价操作（备份手段，详见 docs/API.md）：
 
 ```bash
 # 查所有订单

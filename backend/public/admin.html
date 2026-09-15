@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbit 积分管理台</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --line:#e3e6ea; --text:#1c2330; --sub:#6b7280; --brand:#4f6ef7; --danger:#d64545; --ok:#1f9d55; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 16px; max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: var(--sub); font-size: 13px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin-bottom: 10px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 8px 0 4px; }
+  input { width: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; }
+  button { background: var(--brand); color: #fff; border: 0; border-radius: 8px; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--brand); border: 1px solid var(--brand); }
+  button.danger { background: var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  .row input { flex: 1; min-width: 100px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--sub); font-weight: 500; }
+  .pos { color: var(--ok); font-weight: 600; }
+  .neg { color: var(--danger); font-weight: 600; }
+  .kv { font-size: 14px; line-height: 1.9; }
+  .kv b { display: inline-block; min-width: 110px; color: var(--sub); font-weight: 500; }
+  .msg { margin-top: 10px; font-size: 13px; padding: 8px 10px; border-radius: 8px; display: none; }
+  .msg.ok { display: block; background: #e6f7ee; color: var(--ok); }
+  .msg.err { display: block; background: #fdecec; color: var(--danger); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 12px; color: var(--sub); cursor: pointer; background: #fff; }
+  .hidden { display: none; }
+  #logout { float: right; }
+</style>
+</head>
+<body>
+  <div id="loginView">
+    <h1>Orbit 积分管理台</h1>
+    <p class="sub">管理员登录（与服务器 .env 中 ADMIN_USERNAME / ADMIN_PASSWORD 相同）</p>
+    <div class="card">
+      <label>用户名</label>
+      <input id="loginUser" value="admin" autocomplete="username">
+      <label>密码</label>
+      <input id="loginPass" type="password" autocomplete="current-password">
+      <div class="row"><button id="loginBtn" style="width:100%">登 录</button></div>
+      <div id="loginMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div id="mainView" class="hidden">
+    <button id="logout" class="ghost">退出</button>
+    <h1>Orbit 积分管理台</h1>
+    <p class="sub">查用户 · 加/扣积分 · 订单与流水（积分仅 iOS 钱包）</p>
+
+    <div class="card">
+      <h2>① 查用户</h2>
+      <div class="row">
+        <input id="qUser" placeholder="输入用户名，如 ceshiyonghu">
+        <button id="qBtn">查询</button>
+      </div>
+      <div class="chips" id="recentChips"></div>
+      <div id="userInfo" class="kv hidden"></div>
+      <div id="findMsg" class="msg"></div>
+    </div>
+
+    <div class="card hidden" id="grantCard">
+      <h2>② 加 / 扣积分</h2>
+      <div class="row">
+        <input id="gPoints" type="number" placeholder="正数加、负数扣，如 50 或 -20">
+        <input id="gReason" placeholder="原因，如：测试积分">
+        <button id="gBtn">执行</button>
+      </div>
+      <div id="grantMsg" class="msg"></div>
+    </div>
+
+    <div class="card hidden" id="ordersCard">
+      <h2>③ 内购订单</h2>
+      <div class="row">
+        <button id="ordersUserBtn" class="ghost">此用户的订单</button>
+        <button id="ordersAllBtn" class="ghost">最近全部订单</button>
+      </div>
+      <div style="overflow-x:auto"><table id="ordersTable"></table></div>
+    </div>
+
+    <div class="card hidden" id="opsCard">
+      <h2>④ 积分流水</h2>
+      <button id="opsBtn" class="ghost">刷新流水</button>
+      <div style="overflow-x:auto"><table id="opsTable"></table></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var token = localStorage.getItem('orbit_admin_token') || '';
+  var currentUserId = null;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function showMsg(el, cls, text) { el.className = 'msg ' + cls; el.textContent = text; }
+  function hide(el) { el.classList.add('hidden'); }
+  function show(el) { el.classList.remove('hidden'); }
+
+  function setView(loggedIn) {
+    if (loggedIn) { hide($('loginView')); show($('mainView')); loadRecentUsers(); }
+    else { show($('loginView')); hide($('mainView')); }
+  }
+
+  async function api(path, method, body) {
+    var resp = await fetch(path, {
+      method: method || 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    var data = null;
+    try { data = await resp.json(); } catch (e) { /* 忽略 */ }
+    if (resp.status === 401) { token = ''; localStorage.removeItem('orbit_admin_token'); setView(false); throw new Error('登录已过期，请重新登录'); }
+    if (!resp.ok) throw new Error((data && data.error && data.error.message) || ('请求失败(' + resp.status + ')'));
+    return data;
+  }
+
+  // 登录
+  $('loginBtn').addEventListener('click', async function () {
+    var btn = this; btn.disabled = true;
+    try {
+      var resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: $('loginUser').value.trim(), password: $('loginPass').value })
+      });
+      var data = await resp.json();
+      if (!resp.ok) throw new Error((data.error && data.error.message) || '登录失败');
+      if (data.user.role !== 'admin') throw new Error('该账号不是管理员');
+      token = data.token;
+      localStorage.setItem('orbit_admin_token', token);
+      $('loginPass').value = '';
+      setView(true);
+    } catch (e) { showMsg($('loginMsg'), 'err', e.message); }
+    finally { btn.disabled = false; }
+  });
+  $('loginPass').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('loginBtn').click(); });
+
+  $('logout').addEventListener('click', function () {
+    token = '';
+    localStorage.removeItem('orbit_admin_token');
+    setView(false);
+  });
+
+  // 最近用户
+  async function loadRecentUsers() {
+    try {
+      var data = await api('/api/admin/recent-users?limit=20');
+      var box = $('recentChips'); box.innerHTML = '';
+      (data.users || []).forEach(function (u) {
+        var chip = document.createElement('span');
+        chip.className = 'chip';
+        chip.textContent = u.display_name || u.username;
+        chip.onclick = function () { $('qUser').value = u.display_name || u.username; queryUser(); };
+        box.appendChild(chip);
+      });
+    } catch (e) { /* 列表失败不打扰 */ }
+  }
+
+  // 查用户
+  async function queryUser() {
+    var name = $('qUser').value.trim();
+    if (!name) { showMsg($('findMsg'), 'err', '请输入用户名'); return; }
+    try {
+      var data = await api('/api/admin/find?username=' + encodeURIComponent(name));
+      currentUserId = data.user.id;
+      var info = $('userInfo'); info.innerHTML = '';
+      var rows = [
+        ['用户 ID', String(data.user.id)],
+        ['用户名', String(data.user.username)],
+        ['昵称', data.user.display_name || '—'],
+        ['状态', data.user.status],
+        ['iOS 钱包积分', String(data.ios_wallet.points)],
+        ['OneAPI 子账户', data.ios_wallet.oneapi_user_id ? ('#' + data.ios_wallet.oneapi_user_id) : '未开户'],
+        ['注册时间', data.user.created_at || '—']
+      ];
+      rows.forEach(function (r) {
+        var p = document.createElement('p');
+        var b = document.createElement('b'); b.textContent = r[0];
+        p.appendChild(b);
+        p.appendChild(document.createTextNode(r[1]));
+        info.appendChild(p);
+      });
+      show(info); show($('grantCard')); show($('ordersCard')); show($('opsCard'));
+      showMsg($('findMsg'), 'ok', '已加载：' + (data.user.display_name || data.user.username));
+      loadOps(); loadUserOrders();
+    } catch (e) { showMsg($('findMsg'), 'err', e.message); }
+  }
+  $('qBtn').addEventListener('click', queryUser);
+  $('qUser').addEventListener('keydown', function (e) { if (e.key === 'Enter') queryUser(); });
+
+  // 加/扣积分
+  $('gBtn').addEventListener('click', async function () {
+    if (!currentUserId) { showMsg($('grantMsg'), 'err', '请先查询用户'); return; }
+    var points = parseInt($('gPoints').value, 10);
+    if (!points) { showMsg($('grantMsg'), 'err', '请输入非零整数'); return; }
+    var reason = $('gReason').value.trim() || '管理台操作';
+    var btn = this; btn.disabled = true;
+    try {
+      var data = await api('/api/admin/users/' + currentUserId + '/grant', 'POST', { wallet: 'ios', points: points, reason: reason });
+      showMsg($('grantMsg'), 'ok', '成功：' + (points > 0 ? '+' : '') + points + ' 积分，当前 OneAPI quota = ' + data.quota_after);
+      $('gPoints').value = ''; $('gReason').value = '';
+      queryUser(); loadOps();
+    } catch (e) { showMsg($('grantMsg'), 'err', e.message); }
+    finally { btn.disabled = false; }
+  });
+
+  // 订单
+  function renderOrders(rows) {
+    var t = $('ordersTable');
+    if (!rows.length) { t.innerHTML = '<tr><td style="color:#6b7280">暂无订单</td></tr>'; return; }
+    var html = '<tr><th>订单</th><th>商品</th><th>积分</th><th>环境</th><th>状态</th><th>时间</th></tr>';
+    rows.forEach(function (o) {
+      html += '<tr><td>#' + o.id + '</td><td>' + o.product_id + '</td><td class="pos">+' + o.points + '</td><td>' + o.environment + '</td><td>' + o.status + '</td><td>' + (o.created_at || '') + '</td></tr>';
+    });
+    t.innerHTML = html;
+  }
+  async function loadUserOrders() {
+    try {
+      var data = await api('/api/admin/orders?user_id=' + currentUserId + '&limit=50');
+      renderOrders(data.orders || []);
+    } catch (e) { /* 忽略 */ }
+  }
+  $('ordersUserBtn').addEventListener('click', loadUserOrders);
+  $('ordersAllBtn').addEventListener('click', async function () {
+    try {
+      var data = await api('/api/admin/orders?limit=50');
+      renderOrders(data.orders || []);
+    } catch (e) { showMsg($('grantMsg'), 'err', e.message); }
+  });
+
+  // 流水
+  function renderOps(rows) {
+    var t = $('opsTable');
+    if (!rows.length) { t.innerHTML = '<tr><td style="color:#6b7280">暂无流水</td></tr>'; return; }
+    var html = '<tr><th>流水</th><th>积分</th><th>原因</th><th>quota 前/后</th><th>时间</th></tr>';
+    rows.forEach(function (o) {
+      var cls = o.delta_points >= 0 ? 'pos' : 'neg';
+      var sign = o.delta_points >= 0 ? '+' : '';
+      html += '<tr><td>#' + o.id + '</td><td class="' + cls + '">' + sign + o.delta_points + '</td><td>' + o.reason + '</td><td>' + (o.oneapi_quota_before || 0) + ' → ' + (o.oneapi_quota_after || 0) + '</td><td>' + o.created_at + '</td></tr>';
+    });
+    t.innerHTML = html;
+  }
+  async function loadOps() {
+    if (!currentUserId) return;
+    try {
+      var data = await api('/api/admin/ops?user_id=' + currentUserId + '&limit=50');
+      renderOps(data.ops || []);
+    } catch (e) { /* 忽略 */ }
+  }
+  $('opsBtn').addEventListener('click', loadOps);
+
+  // 初始状态
+  setView(!!token);
+})();
+</script>
+</body>
+</html>

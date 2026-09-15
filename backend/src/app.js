@@ -1,6 +1,7 @@
 // =====================================================================
 // Express 应用装配：中间件 + 路由 + 统一错误处理。
 // =====================================================================
+const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const logger = require('./logger');
@@ -55,6 +56,13 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '4mb' }));
 
 // ---- 业务路由 ----
+
+// 积分管理台网页（必须注册在 /api/admin 路由之前，否则会被后者的鉴权中间件拦截；
+// 页面本身无需鉴权，页面里调用的所有接口都要求管理员令牌）
+app.get('/api/admin/console', (_req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/me', meRoutes);
 app.use('/api/iap', iapRoutes);
