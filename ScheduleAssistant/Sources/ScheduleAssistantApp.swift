@@ -60,6 +60,13 @@ struct OrbitRootView: View {
                 // 不能在对话中声称“已打开”却因状态条件而什么也不发生。
                 showAuth = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .orbitOnboardingRequested)) { _ in
+                showChat = false
+                showAuth = false
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    app.onboardingCompleted = false
+                }
+            }
             .onChange(of: account.isLoggedIn) { loggedIn in
                 guard app.onboardingCompleted else { return }
                 if loggedIn {

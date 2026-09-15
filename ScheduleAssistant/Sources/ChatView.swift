@@ -340,6 +340,7 @@ struct ChatView: View {
                         Text("照片").font(.footnote).foregroundStyle(orbitAccent())
                     }
                 }
+                .buttonStyle(.plain)
                 Button {
                     showPlusPanel = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
@@ -355,6 +356,7 @@ struct ChatView: View {
                         Text("相机").font(.footnote).foregroundStyle(orbitAccent())
                     }
                 }
+                .buttonStyle(.plain)
             }
             .padding(.vertical, 26)
         }

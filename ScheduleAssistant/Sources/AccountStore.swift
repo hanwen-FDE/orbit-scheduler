@@ -6,6 +6,8 @@ extension Notification.Name {
     static let orbitAuthRequired = Notification.Name("orbit.auth.required")
     /// 积分不足，引导打开积分商店。
     static let orbitPointsStoreRequested = Notification.Name("orbit.points.store.requested")
+    /// 无论当前导航位置如何，都从根视图重新打开第一页导览。
+    static let orbitOnboardingRequested = Notification.Name("orbit.onboarding.requested")
 }
 
 /// 登录态与积分账户。token 与云端对话令牌一律存 Keychain（禁止 UserDefaults），
@@ -19,15 +21,18 @@ final class AccountStore: ObservableObject {
     private let cloudBaseAccount = "orbit.cloud.base-url"
     private let usernameKey = "orbit.account.username"
     private let cloudModelKey = "orbit.cloud.model"
+    private let proKey = "orbit.account.isPro"
 
     @Published var username: String?
     @Published var points: Int?
     @Published var isFetchingPoints = false
     @Published var cloudModel: String = ""
+    @Published private(set) var isPro = false
 
     private init() {
         username = UserDefaults.standard.string(forKey: usernameKey)
         cloudModel = UserDefaults.standard.string(forKey: cloudModelKey) ?? ""
+        isPro = UserDefaults.standard.bool(forKey: proKey)
         CloudCredentialCache.refresh()
     }
 
@@ -71,7 +76,9 @@ final class AccountStore: ObservableObject {
     private func finishAuth(_ response: OrbitAPIClient.AuthResponse) async {
         _ = KeychainService.save(response.token, account: tokenAccount)
         username = response.user.username
+        isPro = response.user.is_pro ?? false
         UserDefaults.standard.set(response.user.username, forKey: usernameKey)
+        UserDefaults.standard.set(isPro, forKey: proKey)
         CloudCredentialCache.refresh()
         await refreshPoints()
         // 登录后顺手领取对话令牌；后端幂等，重复调用返回同一令牌。
@@ -85,9 +92,11 @@ final class AccountStore: ObservableObject {
         KeychainService.delete(account: cloudBaseAccount)
         UserDefaults.standard.removeObject(forKey: usernameKey)
         UserDefaults.standard.removeObject(forKey: cloudModelKey)
+        UserDefaults.standard.removeObject(forKey: proKey)
         username = nil
         points = nil
         cloudModel = ""
+        isPro = false
         CloudCredentialCache.refresh()
     }
 

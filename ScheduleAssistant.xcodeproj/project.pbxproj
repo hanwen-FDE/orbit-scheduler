@@ -274,6 +274,15 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					5000000000 = {
+						SystemCapabilities = {
+							com.apple.SignInWithApple = { enabled = 1; };
+							com.apple.WeatherKit = { enabled = 1; };
+							iCloud = { enabled = 1; };
+						};
+					};
+				};
 			};
 			buildConfigurationList = 6000000002;
 			compatibilityVersion = "Xcode 14.0";
@@ -412,6 +421,7 @@
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "用于选择目标日历并写入识别出的日程";
 				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "用于将识别出的日程写入日历";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录入语音以识别日程";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在晨报中提供本地天气；位置不会用于追踪";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择包含日程信息的图片";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄包含日程信息的图片";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音转换为文字以识别日程";
@@ -446,6 +456,7 @@
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "用于选择目标日历并写入识别出的日程";
 				INFOPLIST_KEY_NSCalendarsWriteOnlyAccessUsageDescription = "用于将识别出的日程写入日历";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "用于录入语音以识别日程";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "用于在晨报中提供本地天气；位置不会用于追踪";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "用于选择包含日程信息的图片";
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于拍摄包含日程信息的图片";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "用于将语音转换为文字以识别日程";

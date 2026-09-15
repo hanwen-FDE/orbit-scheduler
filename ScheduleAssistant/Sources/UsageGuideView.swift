@@ -6,65 +6,17 @@ import UIKit
 struct UsageGuideView: View {
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                section("① 输入方式", """
-文字：在“对话”页底部输入框直接打字，点箭头发送。
-
-语音：默认点输入卡片中间的麦克风开始说话，再点一次结束，识别后自动发送；右侧按钮可切换键盘输入。
-
-图片：点左侧 ＋ 选择「照片」或「相机」，选取含日程信息的图片（课程表、会议通知等）。
-
-批量录入：多行文字一次粘贴，每行写一项日程，例如：
-9月10日 8:30 开幕式
-9月10日 10:00 专题报告
-9月10日 14:00 分组讨论
-会逐项识别并直接写入日历。
-
-整场会议：直接说「XX会议，9月10日 8点到18点」，会生成一项完整日程。
-""")
-                section("② 日程卡片", """
-说得清楚就直接写入 Apple 日历，无需再次确认：
-
-• 点日期：只修改日期；点时间：只修改开始/结束时间
-• 点“日历”：快速切换写入的日历；点提醒时长：快速修改提醒
-• 点卡片右上角三个点：打开完整编辑页，修改标题、地点或重复规则
-• 长按卡片后右滑：出现红色删除（二次确认后删除）
-• “同步提醒事项、移动日历”在详情编辑页底部
-• 🔔 第 3 行滑动开关：要不要提醒；点亮后可点橙色时长切换“提前 15 分钟 / 1 小时 / 1 天”等
-• 出现「时间重叠」提示时：Orbit 不会私自改动你的时间；可一键点“改为 XX:XX”采用建议，或进编辑页手动调整
-""")
-                section("③ 重复日程", """
-说“每周三下午 3 点开组会”或在编辑页设置“重复”，会建立 Apple 日历的循环事件。
-
-删除循环日程时可选择只删当前一次，或删当前及后续。
-""")
-                section("④ 主题配色", """
-左上角 Orbit →「主题配色」可选择蓝、黄、紫、浅绿、深绿和深紫蓝黑；App 内按钮和卡片强调色会即时跟随。
-""")
-                section("⑤ AI 识别与积分", """
-默认使用「Orbit 云端」识别服务：注册 / 登录账号后自动领取对话令牌，按积分计费；余额在「左上角头像 → 我的」查看，积分不足时到「积分商店」充值即可。
-
-高级用户可在「设置 → 高级 → 自定义模型服务」切换为自己的 API Key（智谱、DeepSeek、Kimi、通义千问、OpenAI 或任意 OpenAI 兼容接口），Key 保存在本机 iPhone Keychain 中。
-""")
-                section("⑥ 简报设置", """
-晨报、晚报均可在左上角 Orbit →「每日播报」中分别开启，并直接选择每天的推送时间。
-
-晨报会汇总天气（可选）、今天的安排和冲突；晚报会总结今天的安排情况。
-""")
-                section("⑦ 通知与跳转", """
-右上角铃铛保存日程提醒、每日简报、时间冲突等信息；点击通知条目可直接跳转——日程类会打开对应卡片，简报类会定位到对话页里的那张简报卡片（带高亮描边）。
-
-对话页左上角返回按钮可回到“今天”页，按时间轴展示 Apple 日历中的当天安排，可左右翻页查看前后几天。
-""")
-                section("⑧ 常见问题", """
-• 提醒不弹出：检查系统「设置 → 通知 → Orbit」是否允许通知，以及日历账户的提醒是否开启。
-
-• 本 App 通过免费开发者签名安装，有效期 7 天；到期后用电脑 Sideloadly 重新安装一次即可（聊天记录和日程都在）。
-
-• 日程同时存在于系统日历 App 中，可随时在系统日历查看、编辑。
-
-• 修正日程：直接说“改成下午四点”，Orbit 会更新刚才那条日程而不是新建。
-""")
+            VStack(alignment: .leading, spacing: 14) {
+                Text("用一种你习惯的方式，把安排送上轨道。点开卡片查看示例。")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                guideCard("用一句话创建日程", icon: "text.bubble", summary: "直接输入：明天下午四点开课题会", detail: "Orbit 会识别时间、标题和地点并生成日程卡片；信息明确时会写入你选择的 Apple 日历。")
+                guideCard("用语音安排事情", icon: "waveform", summary: "点麦克风，说完再点一次", detail: "语音会先转成文字，再走与文字输入相同的识别流程。右侧按钮可随时切回键盘。")
+                guideCard("拍张图识别日程", icon: "camera", summary: "支持课程表、会议通知和排班表", detail: "点输入框左侧＋，选择照片或相机。发送前请确认图片没有无关的敏感信息。")
+                guideCard("修改刚才的日程", icon: "slider.horizontal.3", summary: "说“改成下午四点”或直接点卡片", detail: "日期、时间、日历和提醒可以就地修改；右上角菜单可编辑标题、地点和重复规则。")
+                guideCard("处理时间冲突", icon: "exclamationmark.triangle", summary: "Orbit 提示冲突，但不会擅自挪动", detail: "你可以采用建议空档，也可以打开卡片手动调整。")
+                guideCard("设置晨报与晚报", icon: "sun.and.horizon", summary: "在左上角 Orbit → 每日播报", detail: "晨报结合当天安排、冲突和可用天气；晚报做简短回顾。天气不可用时会自然省略。")
+                guideCard("从通知找到对应日程", icon: "bell", summary: "点击通知即可定位", detail: "Orbit 会滚动到对应消息或卡片，并用当前主题色短暂高亮目标。")
+                guideCard("账号、积分与 Orbit Pro", icon: "person.crop.circle", summary: "云端 AI 用积分，Pro 解锁自定义模型", detail: "Sign in with Apple 是主要登录方式。Orbit Pro 是永久买断，但继续使用 Orbit 云端 AI 仍会消耗积分。")
             }
             .padding()
         }
@@ -72,16 +24,20 @@ struct UsageGuideView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func section(_ title: String, _ content: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.headline)
-            Text(content)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color(.secondarySystemBackground)))
+    private func guideCard(_ title: String, icon: String, summary: String, detail: String) -> some View {
+        DisclosureGroup {
+            Text(detail).font(.subheadline).foregroundStyle(.secondary).padding(.top, 8)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon).frame(width: 28).foregroundStyle(orbitAccent())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.headline).foregroundStyle(.primary)
+                    Text(summary).font(.caption).foregroundStyle(.secondary)
+                }
+            }
         }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemBackground)))
     }
 }
 

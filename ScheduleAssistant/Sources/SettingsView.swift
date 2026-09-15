@@ -85,7 +85,7 @@ struct AppSettingsScreen: View {
         Form {
             cloudSection
             advancedSection
-            widgetSection
+            syncSection
             dataSection
             contactSection
         }
@@ -106,59 +106,23 @@ struct AppSettingsScreen: View {
     private var cloudSection: some View {
         Section {
             HStack {
-                Label("识别服务", systemImage: "brain.head.profile")
+                Label("积分余额", systemImage: "sparkles")
                 Spacer()
-                Text(settings.activeProvider.name)
-                    .foregroundStyle(.secondary)
-            }
-            HStack {
-                Label("账号", systemImage: "person.crop.circle")
-                Spacer()
-                if account.isLoggedIn {
-                    Text(account.username ?? "已登录")
-                        .foregroundStyle(.secondary)
+                if account.isFetchingPoints {
+                    ProgressView().controlSize(.small)
                 } else {
-                    Button("登录 / 注册") {
-                        NotificationCenter.default.post(name: .orbitAuthRequired, object: nil)
-                    }
-                    .font(.subheadline.bold())
-                }
-            }
-            if usesCloud {
-                HStack {
-                    Label("默认模型", systemImage: "cube.transparent")
-                    Spacer()
-                    Text(account.cloudModel.isEmpty ? "由服务端下发" : account.cloudModel)
+                    Text(account.points.map { "\($0)" } ?? "—")
                         .foregroundStyle(.secondary)
                 }
-                .font(.subheadline)
-                HStack {
-                    Label("积分余额", systemImage: "sparkles")
-                    Spacer()
-                    if account.isFetchingPoints {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Text(account.points.map { "\($0)" } ?? "—")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                NavigationLink(destination: PointsStoreView()) {
-                    Label("充值 · 积分商店", systemImage: "cart.circle")
-                        .foregroundStyle(orbitAccent())
-                }
-            } else {
-                Button {
-                    settings.activeProviderId = "orbit-cloud"
-                } label: {
-                    Label("切换回 Orbit 云端", systemImage: "arrow.triangle.2.circlepath")
-                }
+            }
+            NavigationLink(destination: PointsStoreView()) {
+                Label("充值 · 积分商店", systemImage: "cart.circle")
+                    .foregroundStyle(orbitAccent())
             }
         } header: {
             Text("Orbit 云端服务")
         } footer: {
-            Text(usesCloud
-                 ? "云端服务使用 Orbit 账号的积分按量计费，对话令牌自动领取并保存在 Keychain；模型由服务端下发，不可修改。"
-                 : "当前识别走自定义模型服务（自带 API Key）。云端服务按积分计费，无需填写 Key。")
+            Text("Orbit 云端 AI 按实际使用量扣除积分；Orbit Pro 也不会获得无限云端用量。")
         }
     }
 
@@ -166,34 +130,33 @@ struct AppSettingsScreen: View {
 
     private var advancedSection: some View {
         Section {
-            NavigationLink(destination: CustomModelServiceView()) {
-                Label("自定义模型服务（自带 API Key）", systemImage: "wrench.and.screwdriver")
+            if account.isPro {
+                NavigationLink(destination: CustomModelServiceView()) {
+                    Label("自定义模型服务", systemImage: "wrench.and.screwdriver")
+                }
+            } else {
+                HStack {
+                    Label("自定义模型服务", systemImage: "lock.fill")
+                    Spacer()
+                    Text("Orbit Pro")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text("高级")
         } footer: {
-            Text("高级用法：使用自己的 API Key（智谱、DeepSeek、Kimi、通义千问、OpenAI 或任意 OpenAI 兼容接口）。选择后识别请求将改走该服务。")
+            Text(account.isPro ? "Orbit Pro 可配置 OpenAI-compatible 服务与自己的 API Key。" : "自定义模型服务是 Orbit Pro 永久版专属功能。")
         }
     }
 
-    // MARK: - 小组件与快捷指令
-
-    private var widgetSection: some View {
+    private var syncSection: some View {
         Section {
-            Label("添加 Orbit 小组件", systemImage: "rectangle.on.rectangle")
-            Text("在主屏幕长按 → 编辑 → 添加小组件 → 选择 Orbit，即可一键进入快速记录。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            if let shortcutsURL = URL(string: "shortcuts://") {
-                Link(destination: shortcutsURL) {
-                    Label("打开“快捷指令”App", systemImage: "square.and.arrow.up")
-                }
+            NavigationLink(destination: ICloudSyncSettingsView()) {
+                Label("iCloud 同步", systemImage: "icloud")
             }
-            Text("可添加“快速记录日程”和“查看今日日程”；系统也会将它们用于 Siri 和 Spotlight。")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         } header: {
-            Text("小组件与快捷指令")
+            Text("同步")
         }
     }
 
@@ -227,12 +190,14 @@ struct AppSettingsScreen: View {
                     }
                 }
             }
-            HStack {
-                Label("关于 Orbit", systemImage: "info.circle")
-                Spacer()
-                Text("稍后上线")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            Link(destination: OrbitBackendConfig.websiteURL) {
+                HStack {
+                    Label("关于 Orbit", systemImage: "info.circle")
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
         } header: {
             Text("联系与关于")

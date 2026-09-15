@@ -738,20 +738,18 @@ final class ChatStore: ObservableObject {
             return
         }
         let events = briefing.todayEvents
+        let remaining = events.filter { $0.end > now }.count
         let taskPart: String
-        switch events.count {
-        case 0: taskPart = "今天没有安排任何任务，今晚可以安心休息。"
-        case 1: taskPart = "今天共有 1 项任务，别忘了回顾完成情况。"
-        default:
-            let remaining = events.filter { $0.end > now }.count
-            taskPart = remaining > 0
-                ? "今天共有 \(events.count) 项任务，还剩 \(remaining) 项在进行或未开始。"
-                : "今天共有 \(events.count) 项任务，已全部结束。"
+        if events.isEmpty {
+            taskPart = "今天没有固定日程，希望你也给自己留出了喘息的时间。"
+        } else if remaining > 0 {
+            taskPart = "今天大部分行程已经走完，还有 \(remaining) 项尚未结束，收尾后就安心休息吧。"
+        } else if events.count >= 5 {
+            taskPart = "今天的轨道很满，但这些安排现在都已经告一段落了。"
+        } else {
+            taskPart = "今天的安排已经走完，可以把注意力从日程表上移开了。"
         }
         var parts = ["晚上好。\(taskPart)"]
-        if let span = briefing.daySpanSummary {
-            parts.append(span)
-        }
         let summary = events.count >= 5
             ? "今天节奏不慢，睡前的放松也是日程的一部分。"
             : "把今天放一放，明天的事明天再轨道上见。"
@@ -786,8 +784,8 @@ final class ChatStore: ObservableObject {
         // 问候语按“设定的晨报时间”推算，而不是当下钟点，
         // 避免下午才打开 App 时早报第一句错写成“下午好”。
         var parts = ["\(DailyBriefingStore.greeting(forScheduledHour: AppSettings.shared.morningBriefingTime.hour))。"]
-        if AppSettings.shared.weatherBriefingEnabled {
-            parts.append(briefing.weatherText ?? "天气暂时无法获取。")
+        if AppSettings.shared.weatherBriefingEnabled, let weather = briefing.weatherText {
+            parts.append(weather)
         }
         parts.append(briefing.scheduleSummary)
         if let span = briefing.daySpanSummary {

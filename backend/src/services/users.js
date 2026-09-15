@@ -25,6 +25,7 @@ function publicUser(user) {
     // Apple 首次授权提供的姓名仅用于界面展示，内部用户名不暴露给用户。
     username: user.display_name || user.username,
     role: user.role,
+    is_pro: Boolean(user.is_pro),
     created_at: user.created_at,
   };
 }

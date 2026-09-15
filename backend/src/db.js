@@ -73,6 +73,7 @@ function ensureUserColumn(name, definition) {
 }
 ensureUserColumn('apple_subject', 'TEXT');
 ensureUserColumn('apple_email', 'TEXT');
+ensureUserColumn('is_pro', 'INTEGER NOT NULL DEFAULT 0');
 ensureUserColumn('display_name', 'TEXT');
 // OneAPI 子账户登录凭证：签发对话令牌时必须以子账户身份登录（令牌接口是
 // “自签”语义）。这是机器账号的随机凭证，不涉及任何真人密码。

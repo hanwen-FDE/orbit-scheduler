@@ -90,15 +90,14 @@ struct SideDrawerView: View {
                     }
                 }
             }
-            NavigationLink(destination: ICloudSyncSettingsView()) {
-                HStack {
-                    Label("iCloud 同步", systemImage: "icloud")
-                        .foregroundStyle(orbitAccent())
-                    Spacer()
-                    Text(app.icloudSyncEnabled ? "已开启" : "未开启")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
+            HStack {
+                Label("当前模型", systemImage: "brain.head.profile")
+                Spacer()
+                Text(settings.activeProvider.isCloudService
+                     ? (account.cloudModel.isEmpty ? "Orbit 云端模型" : account.cloudModel)
+                     : settings.activeProvider.name)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
             }
         } header: {
             Text("我的")
@@ -114,7 +113,7 @@ struct SideDrawerView: View {
         }
     }
 
-    // MARK: - 主题色与桌面 Logo
+    // MARK: - 主题色与 App Icon
 
     private var themeSection: some View {
         Section {
@@ -146,7 +145,7 @@ struct SideDrawerView: View {
             .padding(.vertical, 6)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Logo")
+                Text("App Icon")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 logoRow
@@ -155,7 +154,7 @@ struct SideDrawerView: View {
         } header: {
             Text("主题配色")
         } footer: {
-            Text("主题影响 App 内按钮、图标与卡片配色；Logo 颜色与主题一一对应。")
+            Text("主题影响 App 内强调色；App Icon 预览展示安装到主屏幕后看到的完整图标。")
         }
     }
 
@@ -164,21 +163,20 @@ struct SideDrawerView: View {
         HStack(spacing: 17) {
             ForEach(OrbitThemePreset.allCases) { preset in
                 Button { app.theme = preset } label: {
-                    Ellipse()
-                        .stroke(preset.accent, lineWidth: 3)
-                        .frame(width: 31, height: 17)
-                        .rotationEffect(.degrees(-43))
-                        .padding(7)
-                        .background(
-                            Circle().fill(preset == app.theme ? preset.accent.opacity(0.16) : .clear)
-                        )
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(LinearGradient(colors: [preset.accent, preset.accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .frame(width: 45, height: 45)
+                        .overlay {
+                            Ellipse().stroke(.white, lineWidth: 2.5)
+                                .frame(width: 25, height: 13)
+                                .rotationEffect(.degrees(-43))
+                        }
                         .overlay {
                             if preset == app.theme {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(preset.accent)
-                                    .offset(y: 19)
-                            }
+                                    .foregroundStyle(.white)
+                        }
                         }
                 }
                 .buttonStyle(.plain)
@@ -191,10 +189,32 @@ struct SideDrawerView: View {
 
     private var defaultSettingsSection: some View {
         Section {
-            Picker("默认日历", selection: $app.defaultCalendarId) {
-                Text("未选择").tag(Optional<String>.none)
-                ForEach(CalendarService.shared.availableCalendars(), id: \.calendarIdentifier) { cal in
-                    Text(CalendarService.shared.calendarDisplayName(cal)).tag(Optional(cal.calendarIdentifier))
+            HStack {
+                Text("默认日历")
+                Spacer()
+                Menu {
+                    Button("未选择") { app.defaultCalendarId = nil }
+                    ForEach(calendarSources, id: \.sourceIdentifier) { source in
+                        Menu(source.title) {
+                            ForEach(calendars(for: source), id: \.calendarIdentifier) { calendar in
+                                Button {
+                                    app.defaultCalendarId = calendar.calendarIdentifier
+                                } label: {
+                                    if app.defaultCalendarId == calendar.calendarIdentifier {
+                                        Label(calendar.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(calendar.title)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(app.defaultCalendarId.flatMap(CalendarService.shared.calendarName) ?? "未选择")
+                            .lineLimit(1)
+                        Image(systemName: "chevron.up.chevron.down").font(.caption2)
+                    }
                 }
             }
             Picker("默认提醒", selection: $app.defaultReminderMinutes) {
@@ -210,6 +230,18 @@ struct SideDrawerView: View {
         } footer: {
             Text("默认日历决定新日程写到哪里；日历读取决定“今天”、简报和冲突检查读取哪些日历。默认写入日历会始终包含在读取范围内。")
         }
+    }
+
+    private var calendarSources: [EKSource] {
+        Dictionary(grouping: CalendarService.shared.availableCalendars(), by: { $0.source.sourceIdentifier })
+            .values.compactMap { $0.first?.source }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    private func calendars(for source: EKSource) -> [EKCalendar] {
+        CalendarService.shared.availableCalendars()
+            .filter { $0.source.sourceIdentifier == source.sourceIdentifier }
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
 
     /// 默认设置中的第 5 行：用一个下拉菜单完成多日历读取范围选择。
@@ -351,7 +383,7 @@ struct SideDrawerView: View {
             Button {
                 dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    app.onboardingCompleted = false
+                    NotificationCenter.default.post(name: .orbitOnboardingRequested, object: nil)
                 }
             } label: {
                 drawerButtonRow("使用导览", systemImage: "sparkles")

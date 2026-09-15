@@ -76,20 +76,26 @@ struct NotificationBellButton: View {
 
     var body: some View {
         Button { isPresented = true } label: {
-            Image(systemName: notifications.unreadCount == 0 ? "bell" : "bell.fill")
-                .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(orbitAccent())
-                .overlay(alignment: .topTrailing) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: notifications.unreadCount == 0 ? "bell" : "bell.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(orbitAccent())
+                Group {
                     if notifications.unreadCount > 0 {
                         Text("\(min(99, notifications.unreadCount))")
                             .font(.system(size: 8, weight: .bold))
                             .foregroundStyle(.white)
                             .padding(3)
                             .background(Circle().fill(orbitAccent()))
-                            .offset(x: 8, y: -8)
+                            .offset(x: 7, y: -7)
                     }
                 }
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Circle())
+            .clipShape(Circle())
         }
+        .buttonStyle(.plain)
         .accessibilityLabel("通知中心，\(notifications.unreadCount) 条未读")
     }
 }

@@ -67,10 +67,10 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         case .denied, .restricted:
             isLoadingWeather = false
             locationPermissionNeeded = true
-            weatherText = "允许定位后可显示本地天气"
+            weatherText = nil
         @unknown default:
             isLoadingWeather = false
-            weatherText = "天气暂时不可用"
+            weatherText = nil
         }
     }
 
@@ -83,7 +83,7 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         } else if manager.authorizationStatus == .denied || manager.authorizationStatus == .restricted {
             isLoadingWeather = false
             locationPermissionNeeded = true
-            weatherText = "允许定位后可显示本地天气"
+            weatherText = nil
         }
     }
 
@@ -95,14 +95,14 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor [weak self] in
             self?.isLoadingWeather = false
-            self?.weatherText = "天气暂时无法获取"
+            self?.weatherText = nil
         }
     }
 
     private func loadWeather(for location: CLLocation) async {
         guard #available(iOS 16.0, *) else {
             // WeatherKit 需要 iOS 16；旧系统上明确降级而不是报错。
-            weatherText = "本地天气需要 iOS 16 或更新系统"
+            weatherText = nil
             weatherSymbolName = "cloud.sun"
             isLoadingWeather = false
             return
@@ -113,7 +113,7 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
             weatherText = "现在 \(Int(celsius.rounded()))°C"
             weatherSymbolName = weather.currentWeather.symbolName
         } catch {
-            weatherText = "天气暂时无法获取"
+            weatherText = nil
         }
         isLoadingWeather = false
     }
@@ -140,14 +140,16 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
     }
 
     var scheduleSummary: String {
-        switch todayEvents.count {
-        case 0:
-            return "今天日历还没有安排，留一点空间给真正重要的事。"
-        case 1:
-            return "今天有 1 项安排，稳稳完成它就很好。"
-        default:
-            return "今天有 \(todayEvents.count) 项安排，先抓住最重要的一件。"
+        guard !todayEvents.isEmpty else { return "今天没有固定安排，可以把时间留给最重要的事。" }
+        let timed = todayEvents.filter { !$0.isAllDay }.sorted { $0.start < $1.start }
+        guard let first = timed.first else { return "今天有 \(todayEvents.count) 项全天安排，节奏由你掌握。" }
+        if todayEvents.count >= 6 {
+            return "今天安排得比较满，第一项是 \(first.start.shortTime) 的 \(first.title)，记得给行程留一点缓冲。"
         }
+        if todayEvents.count == 1 {
+            return "今天的重点是 \(first.start.shortTime) 的 \(first.title)。"
+        }
+        return "今天从 \(first.start.shortTime) 的 \(first.title) 开始，共有 \(todayEvents.count) 项安排。"
     }
 
     var encouragement: String {
@@ -165,7 +167,8 @@ final class DailyBriefingStore: NSObject, ObservableObject, CLLocationManagerDel
         let timed = todayEvents.filter { !$0.isAllDay }
         guard let earliest = timed.min(by: { $0.start < $1.start }),
               let latest = timed.max(by: { $0.end < $1.end }) else { return nil }
-        return "最早 \(earliest.start.shortTime)《\(earliest.title)》，最晚到 \(latest.end.shortTime)《\(latest.title)》结束"
+        if earliest.id == latest.id { return nil }
+        return "最后一项预计在 \(latest.end.shortTime) 结束，前后别排得太紧。"
     }
 
     /// 早报结尾的加油语：按日期轮换，同一天内多次刷新不变。
@@ -293,7 +296,7 @@ struct DailyBriefingCard: View {
                     .foregroundStyle(orbitAccent())
             }
 
-            if app.weatherBriefingEnabled {
+            if app.weatherBriefingEnabled, store.isLoadingWeather || store.weatherText != nil {
                 HStack(spacing: 7) {
                     if store.isLoadingWeather {
                         ProgressView().controlSize(.small)
@@ -304,11 +307,6 @@ struct DailyBriefingCard: View {
                     Spacer()
                     Button("刷新") { store.refreshWeatherIfEnabled() }
                         .font(.caption.bold())
-                }
-                if store.locationPermissionNeeded {
-                    Text("可在“设置 → 隐私与安全性 → 定位服务 → Orbit”中允许定位。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
             } else {
                 Button {

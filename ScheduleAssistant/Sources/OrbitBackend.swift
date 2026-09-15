@@ -32,8 +32,10 @@ enum OrbitBackendConfig {
     }
 
     static var supportEmail: String {
-        (Bundle.main.object(forInfoDictionaryKey: "OrbitSupportEmail") as? String) ?? "support@example.com"
+        (Bundle.main.object(forInfoDictionaryKey: "OrbitSupportEmail") as? String) ?? "service.orbit@itransstudio.com"
     }
+
+    static let websiteURL = URL(string: "https://orbit.itransstudio.com")!
 }
 
 /// 后端统一错误：HTTP 状态 + {error:{code,message}}。
@@ -80,6 +82,7 @@ enum OrbitAPIClient {
             let id: Int
             let username: String
             let role: String
+            let is_pro: Bool?
             let created_at: String?
         }
     }

@@ -1,7 +1,7 @@
 # Orbit 官网页网部署指南（隐私政策 / 支持页 / 首页）
 
 > 提审前**必须**让 `privacy.html` 通过一个可公开访问的 URL 访问（App Store Connect 里要填）。
-> 本目录 3 个页面均为零依赖静态 HTML，上传即用。支持邮箱统一为 **service.orbit@iChatStudio.com**；上线前须确认该邮箱可收信，并将三个页面一同部署。
+> 本目录 3 个页面均为零依赖静态 HTML，上传即用。支持邮箱统一为 **service.orbit@itransstudio.com**；上线前须确认该邮箱可收信，并将三个页面一同部署。
 
 ## 页面清单
 
@@ -56,7 +56,7 @@ scp index.html privacy.html support.html user@你的服务器:/var/www/orbit/
 |---|---|---|
 | index.html 页脚 | 开发者姓名 | ✅ Hanwen ZHANG |
 | privacy.html 第一章 | 开发者姓名 | ✅ Hanwen ZHANG |
-| index.html 页脚（mailto 链接） | 联系邮箱 | `service.orbit@iChatStudio.com` |
-| privacy.html 第一章 + 第八章 | 联系邮箱（2 处） | `service.orbit@iChatStudio.com` |
-| support.html 联系卡片 | 联系邮箱 | `service.orbit@iChatStudio.com` |
+| index.html 页脚（mailto 链接） | 联系邮箱 | `service.orbit@itransstudio.com` |
+| privacy.html 第一章 + 第八章 | 联系邮箱（2 处） | `service.orbit@itransstudio.com` |
+| support.html 联系卡片 | 联系邮箱 | `service.orbit@itransstudio.com` |
 | （可选）三页页脚 | 备案号 | 中国区开放后再加，格式如"京ICP备2026XXXXXX号-X" |

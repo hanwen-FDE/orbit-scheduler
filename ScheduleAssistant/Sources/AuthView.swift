@@ -31,7 +31,7 @@ struct AuthView: View {
                     .rotationEffect(.degrees(-43))
                 Text(isRegisterMode ? "创建 Orbit 账号" : "登录 Orbit")
                     .font(.title2.bold())
-                Text("登录后使用 Orbit 云端 AI 识别，按积分计费；\n也可以稍后在「设置 → 高级」使用自己的 API Key。")
+                Text("使用可恢复的账号保存积分与权益；Orbit Pro 可配置自定义模型。")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -39,15 +39,20 @@ struct AuthView: View {
             .padding(.horizontal, 30)
 
             VStack(spacing: 14) {
-                TextField("用户名（3~32 位字母、数字或下划线）", text: $username)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                SecureField(isRegisterMode ? "设置密码（8~64 位）" : "密码", text: $password)
-                Picker("", selection: $isRegisterMode) {
+                Picker("登录方式", selection: $isRegisterMode) {
                     Text("登录").tag(false)
                     Text("注册").tag(true)
                 }
                 .pickerStyle(.segmented)
+
+                TextField("用户名（3~32 位字母、数字或下划线）", text: $username)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+                SecureField(isRegisterMode ? "设置密码（8~64 位）" : "密码", text: $password)
+                    .padding(12)
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
 
                 Button(action: submit) {
                     HStack(spacing: 8) {
@@ -152,8 +157,11 @@ struct AuthView: View {
               let tokenData = credential.identityToken,
               let identityToken = String(data: tokenData, encoding: .utf8) else {
             if case .failure(let error) = result,
-               (error as? ASAuthorizationError)?.code != .canceled {
-                errorMessage = "Apple 登录未完成：\(error.localizedDescription)"
+               let authError = error as? ASAuthorizationError,
+               authError.code != .canceled {
+                errorMessage = authError.code == .unknown
+                    ? "Apple 登录未能启动。请确认网络与 Apple ID 状态后重试；若仍失败，需要检查开发者后台的 Sign in with Apple 配置。"
+                    : "Apple 登录未完成：\(authError.localizedDescription)"
             }
             return
         }
