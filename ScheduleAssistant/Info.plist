@@ -84,7 +84,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>OrbitBackendBaseURL</key>
-	<string>https://api.example.com</string>
+	<string>https://api.itransstudio.com:8443</string>
 	<key>OrbitBackendMock</key>
 	<false/>
 	<key>OrbitPointProducts</key>
