@@ -229,7 +229,32 @@ async function ping() {
   }
 }
 
+// ---------------------------------------------------------------------
+// 5. 消费日志（管理员）：供 Orbit 管理台展示真实模型调用量。
+// OneAPI 的日志接口分页参数是 p（页码从 0 开始），时间戳使用秒。
+// 不把管理员令牌下发给浏览器，所有调用均由 Orbit 后端代发。
+// ---------------------------------------------------------------------
+async function getLogsPage({ username = '', startTimestamp = 0, endTimestamp = 0, page = 0 } = {}) {
+  const params = new URLSearchParams({ p: String(Math.max(0, Number(page) || 0)), type: '2' });
+  if (username) params.set('username', username);
+  if (startTimestamp) params.set('start_timestamp', String(startTimestamp));
+  if (endTimestamp) params.set('end_timestamp', String(endTimestamp));
+  const json = await apiCall('GET', `/api/log/?${params.toString()}`);
+  const data = json?.data;
+  if (Array.isArray(data)) return data;
+  return data?.items || data?.logs || [];
+}
+
+async function getLogsStat({ username = '', startTimestamp = 0, endTimestamp = 0 } = {}) {
+  const params = new URLSearchParams({ type: '2' });
+  if (username) params.set('username', username);
+  if (startTimestamp) params.set('start_timestamp', String(startTimestamp));
+  if (endTimestamp) params.set('end_timestamp', String(endTimestamp));
+  const json = await apiCall('GET', `/api/log/stat?${params.toString()}`);
+  return json?.data || {};
+}
+
 module.exports = {
   createUser, getUser, getUserQuota, addUserQuota, resetUserPassword,
-  createToken, randomPassword, ping,
+  createToken, randomPassword, ping, getLogsPage, getLogsStat,
 };

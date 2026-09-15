@@ -6,11 +6,72 @@ const express = require('express');
 const db = require('../db');
 const users = require('../services/users');
 const iap = require('../services/iap');
+const oneapi = require('../services/oneapi');
+const config = require('../config');
 const { requireAdmin } = require('../middleware/auth');
 const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 
 const router = express.Router();
 router.use(requireAdmin);
+
+function timestamp(value, fallback) {
+  if (!value) return fallback;
+  const parsed = Date.parse(String(value));
+  return Number.isNaN(parsed) ? fallback : Math.floor(parsed / 1000);
+}
+
+function usageRecord(row) {
+  const quota = Number(row.quota || 0);
+  return {
+    id: row.id ?? row.request_id ?? null,
+    request_id: row.request_id || '',
+    username: row.username || '',
+    model: row.model_name || row.model || '',
+    token_name: row.token_name || '',
+    prompt_tokens: Number(row.prompt_tokens || 0),
+    completion_tokens: Number(row.completion_tokens || 0),
+    cached_tokens: Number(row.cached_tokens || 0),
+    quota,
+    points: quota / config.oneapi.quotaPerPoint,
+    elapsed_ms: Number(row.elapsed_time || 0),
+    is_stream: Boolean(row.is_stream),
+    created_at: row.created_at || row.timestamp || null,
+  };
+}
+
+// GET /api/admin/overview —— 管理台总览卡片
+router.get('/overview', asyncHandler(async (_req, res) => {
+  const usersCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'user'").get().count;
+  const orders = db.prepare(
+    `SELECT COUNT(*) AS count,
+            COALESCE(SUM(CASE WHEN status = 'delivered' THEN points ELSE 0 END), 0) AS delivered_points,
+            COALESCE(SUM(CASE WHEN status = 'refunded' THEN points ELSE 0 END), 0) AS refunded_points
+     FROM iap_orders`
+  ).get();
+  const ops = db.prepare(
+    `SELECT COALESCE(SUM(CASE WHEN delta_points > 0 THEN delta_points ELSE 0 END), 0) AS credited,
+            COALESCE(SUM(CASE WHEN delta_points < 0 THEN -delta_points ELSE 0 END), 0) AS debited
+     FROM quota_ops`
+  ).get();
+  const end = Math.floor(Date.now() / 1000);
+  const start = end - 30 * 24 * 60 * 60;
+  let usage = { quota: 0 };
+  let usageAvailable = true;
+  try { usage = await oneapi.getLogsStat({ startTimestamp: start, endTimestamp: end }); }
+  catch { usageAvailable = false; }
+  res.json({
+    users: Number(usersCount),
+    orders: Number(orders.count),
+    credited_points: Number(ops.credited),
+    debited_points: Number(ops.debited),
+    usage_30d: {
+      quota: Number(usage.quota || 0),
+      points: Number(usage.quota || 0) / config.oneapi.quotaPerPoint,
+      available: usageAvailable,
+    },
+    generated_at: new Date().toISOString(),
+  });
+}));
 
 // GET /api/admin/orders?status=&user_id=&limit=
 router.get('/orders', asyncHandler(async (req, res) => {
@@ -74,12 +135,43 @@ router.get('/find', asyncHandler(async (req, res) => {
 
 // GET /api/admin/ops?user_id=&limit= —— 管理台用：某用户的积分流水
 router.get('/ops', asyncHandler(async (req, res) => {
-  const userId = Number(req.query.user_id);
-  if (!Number.isInteger(userId) || userId <= 0) throw new ApiError('BAD_PARAM', '缺少 user_id 参数', 400);
+  const userId = req.query.user_id ? Number(req.query.user_id) : null;
+  if (req.query.user_id && (!Number.isInteger(userId) || userId <= 0)) throw new ApiError('BAD_PARAM', 'user_id 无效', 400);
+  const limit = Math.min(Number(req.query.limit) || 50, 200);
   const rows = db.prepare(
-    'SELECT id, wallet, delta_points, reason, oneapi_quota_before, oneapi_quota_after, created_at FROM quota_ops WHERE user_id = ? ORDER BY id DESC LIMIT ?'
-  ).all(userId, Math.min(Number(req.query.limit) || 50, 200));
+    `SELECT q.id, q.user_id, u.username, q.wallet, q.delta_points, q.reason,
+            q.oneapi_quota_before, q.oneapi_quota_after, q.created_at
+     FROM quota_ops q JOIN users u ON u.id = q.user_id
+     ${userId ? 'WHERE q.user_id = ?' : ''}
+     ORDER BY q.id DESC LIMIT ?`
+  ).all(...(userId ? [userId, limit] : [limit]));
   res.json({ ops: rows });
+}));
+
+// GET /api/admin/usage —— 从 OneAPI 读取真实模型调用流水
+router.get('/usage', asyncHandler(async (req, res) => {
+  const userId = req.query.user_id ? Number(req.query.user_id) : null;
+  if (req.query.user_id && (!Number.isInteger(userId) || userId <= 0)) throw new ApiError('BAD_PARAM', 'user_id 无效', 400);
+  const user = userId ? users.findById(userId) : null;
+  if (userId && !user) throw new ApiError('USER_NOT_FOUND', '用户不存在', 404);
+  const end = timestamp(req.query.to, Math.floor(Date.now() / 1000));
+  const start = timestamp(req.query.from, end - 30 * 24 * 60 * 60);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 200);
+  const pages = Math.ceil(limit / 10);
+  const rows = [];
+  for (let page = 0; page < pages && rows.length < limit; page += 1) {
+    const batch = await oneapi.getLogsPage({
+      username: user?.oneapi_ios_username || '', startTimestamp: start, endTimestamp: end, page,
+    });
+    rows.push(...batch);
+    if (batch.length < 10) break;
+  }
+  res.json({
+    available: true,
+    from: new Date(start * 1000).toISOString(),
+    to: new Date(end * 1000).toISOString(),
+    usage: rows.slice(0, limit).map(usageRecord),
+  });
 }));
 
 // GET /api/admin/recent-users?limit= —— 管理台用：最近注册的用户，方便挑人

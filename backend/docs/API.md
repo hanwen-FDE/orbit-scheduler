@@ -188,7 +188,15 @@ iOS 端取收据：`Bundle.main.appStoreReceiptURL` 读文件后 base64。
 
 ### 0. 积分管理台（网页）
 
-`GET BASE/api/admin/console` —— 静态网页，浏览器打开后用管理员账号登录即可查用户、加/扣积分、看订单与流水。页面调用的都是下面这些管理员接口。
+`GET BASE/api/admin/console` —— 静态网页，浏览器打开后用管理员账号登录即可查用户、加/扣积分、看订单、积分流水和模型使用量。页面还支持在浏览器本地生成报告图片并分享/下载。
+
+管理台的模型使用量来自 OneAPI 的管理员日志接口，由 Orbit 后端代为读取；OneAPI 管理令牌不会下发到浏览器。
+
+### 0.1 管理台总览
+
+`GET BASE/api/admin/overview`
+
+返回注册用户数、订单数、累计入账/扣减积分，以及近 30 天 OneAPI 消费 quota 换算的积分等价量。若 OneAPI 日志暂不可用，`usage_30d.available` 为 `false`，不会影响积分账本和用户查询。
 
 ### 12.1 按用户名查用户
 
@@ -208,6 +216,21 @@ iOS 端取收据：`Bundle.main.appStoreReceiptURL` 读文件后 base64。
 ### 12.3 最近注册用户
 
 `GET BASE/api/admin/recent-users?limit=20`
+
+### 12.4 模型使用流水
+
+`GET BASE/api/admin/usage?user_id=&from=&to=&limit=100`
+
+- `user_id` 可选；不传则查看全部用户
+- `from`、`to` 可选，使用 ISO 日期时间；默认近 30 天
+- 返回模型名、输入/输出 Token、OneAPI quota、积分等价消耗、请求耗时和请求时间
+- `points` 仅用于运营展示，计算方式为 `quota / ONEAPI_QUOTA_PER_POINT`；真实扣款仍以 OneAPI quota 为准
+
+### 12.5 全部积分流水
+
+`GET BASE/api/admin/ops?user_id=&limit=100`
+
+不传 `user_id` 时返回全部用户的 Orbit 账本流水，并带上用户名。
 
 ### 9. 订单列表
 

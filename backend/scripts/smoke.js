@@ -179,6 +179,7 @@ function startOneApiStub() {
 
   const users = new Map(); // id -> {id, username, password, quota}
   const tokens = [];       // {id, name, user_id, key}
+  const logs = [{ id: 501, user_id: 101, username: 'orbit_smoke', model_name: 'glm-4v-plus', token_name: 'orbit_uid_2', prompt_tokens: 120, completion_tokens: 80, quota: 200, elapsed_time: 420, is_stream: true, created_at: Math.floor(Date.now() / 1000) }];
   const sessions = new Map(); // session id -> userId（模拟登录会话）
   let nextUserId = 100;
   let nextTokenId = 200;
@@ -261,6 +262,17 @@ function startOneApiStub() {
   });
 
   app.get('/api/status', (_req, res) => res.json({ success: true, data: {} }));
+  app.get('/api/log/', (req, res) => {
+    const username = String(req.query.username || '');
+    const filtered = logs.filter((log) => !username || log.username === username);
+    res.json({ success: true, data: filtered });
+  });
+  app.get('/api/log/stat', (req, res) => {
+    const username = String(req.query.username || '');
+    const quota = logs.filter((log) => !username || log.username === username)
+      .reduce((sum, log) => sum + log.quota, 0);
+    res.json({ success: true, data: { quota } });
+  });
 
   return app.listen(PORTS.oneapi);
 }
@@ -435,6 +447,12 @@ async function main() {
     check('管理员补点成功', grant.status === 200);
     const pts3 = await api('GET', '/api/me/points', null, userToken);
     check('补点后余额 510', pts3.json?.points === 510);
+    const overview = await api('GET', '/api/admin/overview', null, adminToken);
+    check('管理台总览接口返回积分与使用量', overview.status === 200 && overview.json?.users === 1 && overview.json?.usage_30d?.available === true);
+    const usage = await api('GET', '/api/admin/usage?limit=20', null, adminToken);
+    check('管理台可读取 OneAPI 模型使用流水', usage.status === 200 && usage.json?.usage?.[0]?.model === 'glm-4v-plus');
+    const allOps = await api('GET', '/api/admin/ops?limit=100', null, adminToken);
+    check('管理台可读取全部用户积分流水', allOps.status === 200 && allOps.json?.ops?.length >= 1);
   } finally {
     child.kill();
     appleSrv.close();
