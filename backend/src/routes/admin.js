@@ -22,6 +22,11 @@ function timestamp(value, fallback) {
 
 function usageRecord(row) {
   const quota = Number(row.quota || 0);
+  const rawCreatedAt = row.created_at || row.timestamp || null;
+  const numericCreatedAt = Number(rawCreatedAt);
+  const createdAt = rawCreatedAt && Number.isFinite(numericCreatedAt)
+    ? new Date((numericCreatedAt < 100000000000 ? numericCreatedAt * 1000 : numericCreatedAt)).toISOString()
+    : rawCreatedAt;
   return {
     id: row.id ?? row.request_id ?? null,
     request_id: row.request_id || '',
@@ -35,7 +40,7 @@ function usageRecord(row) {
     points: quota / config.oneapi.quotaPerPoint,
     elapsed_ms: Number(row.elapsed_time || 0),
     is_stream: Boolean(row.is_stream),
-    created_at: row.created_at || row.timestamp || null,
+    created_at: createdAt,
   };
 }
 
