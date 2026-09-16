@@ -21,10 +21,11 @@ final class AccountStore: ObservableObject {
     private let cloudBaseAccount = "orbit.cloud.base-url"
     private let usernameKey = "orbit.account.username"
     private let cloudModelKey = "orbit.cloud.model"
-    private let proKey = "orbit.account.isPro"
 
     @Published var username: String?
     @Published var points: Int?
+    @Published private(set) var pointsLedger: [OrbitAPIClient.PointsLedgerEntry] = []
+    @Published var isFetchingLedger = false
     @Published var isFetchingPoints = false
     @Published var cloudModel: String = ""
     @Published private(set) var isPro = false
@@ -32,7 +33,7 @@ final class AccountStore: ObservableObject {
     private init() {
         username = UserDefaults.standard.string(forKey: usernameKey)
         cloudModel = UserDefaults.standard.string(forKey: cloudModelKey) ?? ""
-        isPro = UserDefaults.standard.bool(forKey: proKey)
+        isPro = false
         CloudCredentialCache.refresh()
     }
 
@@ -78,7 +79,6 @@ final class AccountStore: ObservableObject {
         username = response.user.username
         isPro = response.user.is_pro ?? false
         UserDefaults.standard.set(response.user.username, forKey: usernameKey)
-        UserDefaults.standard.set(isPro, forKey: proKey)
         CloudCredentialCache.refresh()
         await refreshPoints()
         // 登录后顺手领取对话令牌；后端幂等，重复调用返回同一令牌。
@@ -92,7 +92,6 @@ final class AccountStore: ObservableObject {
         KeychainService.delete(account: cloudBaseAccount)
         UserDefaults.standard.removeObject(forKey: usernameKey)
         UserDefaults.standard.removeObject(forKey: cloudModelKey)
-        UserDefaults.standard.removeObject(forKey: proKey)
         username = nil
         points = nil
         cloudModel = ""
@@ -118,6 +117,32 @@ final class AccountStore: ObservableObject {
             handleSessionExpired()
         } catch {
             // 余额拉取失败不打断使用，下次进入页面再试。
+        }
+    }
+
+    /// Pro 权益只接受 Orbit 账户服务端的 entitlement；不从 UserDefaults 恢复。
+    func refreshEntitlement() async {
+        guard let token else { isPro = false; return }
+        do {
+            let data = try await OrbitAPIClient.request(path: "/api/me", token: token)
+            let response = try OrbitAPIClient.decode(OrbitAPIClient.MeResponse.self, from: data)
+            isPro = response.is_pro ?? false
+        } catch let error as OrbitAPIError where error.status == 401 {
+            handleSessionExpired()
+        } catch { }
+    }
+
+    func refreshPointsLedger() async {
+        guard let token else { pointsLedger = []; return }
+        isFetchingLedger = true
+        defer { isFetchingLedger = false }
+        do {
+            let data = try await OrbitAPIClient.request(path: "/api/me/points/ledger", token: token)
+            pointsLedger = try OrbitAPIClient.decode(OrbitAPIClient.PointsLedgerResponse.self, from: data).entries
+        } catch let error as OrbitAPIError where error.status == 401 {
+            handleSessionExpired()
+        } catch {
+            // 保留上次成功读取的明细；服务端未升级时不伪造任何交易记录。
         }
     }
 

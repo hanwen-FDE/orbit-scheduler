@@ -447,6 +447,8 @@ async function main() {
     check('管理员补点成功', grant.status === 200);
     const pts3 = await api('GET', '/api/me/points', null, userToken);
     check('补点后余额 510', pts3.json?.points === 510);
+    const ledger = await api('GET', '/api/me/points/ledger', null, userToken);
+    check('用户可读取自己的积分账本与余额快照', ledger.status === 200 && ledger.json?.entries?.[0]?.balance_after === 510);
     const overview = await api('GET', '/api/admin/overview', null, adminToken);
     check('管理台总览接口返回积分与使用量', overview.status === 200 && overview.json?.users === 1 && overview.json?.usage_30d?.available === true);
     const usage = await api('GET', '/api/admin/usage?limit=20', null, adminToken);

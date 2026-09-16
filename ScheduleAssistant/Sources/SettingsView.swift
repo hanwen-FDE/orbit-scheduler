@@ -3,6 +3,7 @@ import SwiftUI
 /// 单个服务商的配置编辑 + 连接测试（用于「设置 → 高级 → 自定义模型服务」）
 struct ProviderConfigView: View {
     let provider: LLMProvider
+    let isEditable: Bool
     @EnvironmentObject private var settings: LLMSettings
 
     @State private var apiKey = ""
@@ -29,14 +30,15 @@ struct ProviderConfigView: View {
                     Text(isTesting ? "测试中…" : "测试连接")
                 }
             }
-            .disabled(isTesting || apiKey.isEmpty)
+            .disabled(!isEditable || isTesting || apiKey.isEmpty)
             if let testResult {
                 Text(testResult).font(.footnote)
                     .foregroundStyle(testResult.hasPrefix("✓") ? .green : .red)
             }
         }
         .onAppear { load() }
-        .onDisappear { save() }
+        .onDisappear { if isEditable { save() } }
+        .disabled(!isEditable)
     }
 
     private func load() {
@@ -47,6 +49,7 @@ struct ProviderConfigView: View {
     }
 
     private func save() {
+        guard isEditable else { return }
         var config = settings.config(for: provider)
         config.apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         config.baseURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -55,6 +58,7 @@ struct ProviderConfigView: View {
     }
 
     private func testConnection() {
+        guard isEditable else { return }
         save()
         isTesting = true
         testResult = nil
@@ -83,7 +87,6 @@ struct AppSettingsScreen: View {
 
     var body: some View {
         Form {
-            cloudSection
             advancedSection
             syncSection
             dataSection
@@ -92,37 +95,9 @@ struct AppSettingsScreen: View {
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
         .tint(orbitAccent())
-        .onAppear {
-            Task { await account.refreshPoints() }
-        }
         .confirmationDialog("删除当前对话？", isPresented: $showDeleteConversationConfirmation, titleVisibility: .visible) {
             Button("删除对话", role: .destructive) { chat.clearConversation() }
             Button("取消", role: .cancel) {}
-        }
-    }
-
-    // MARK: - Orbit 云端服务（默认路径）
-
-    private var cloudSection: some View {
-        Section {
-            HStack {
-                Label("积分余额", systemImage: "sparkles")
-                Spacer()
-                if account.isFetchingPoints {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text(account.points.map { "\($0)" } ?? "—")
-                        .foregroundStyle(.secondary)
-                }
-            }
-            NavigationLink(destination: PointsStoreView()) {
-                Label("充值 · 积分商店", systemImage: "cart.circle")
-                    .foregroundStyle(orbitAccent())
-            }
-        } header: {
-            Text("Orbit 云端服务")
-        } footer: {
-            Text("Orbit 云端 AI 按实际使用量扣除积分；Orbit Pro 也不会获得无限云端用量。")
         }
     }
 
@@ -130,17 +105,11 @@ struct AppSettingsScreen: View {
 
     private var advancedSection: some View {
         Section {
-            if account.isPro {
-                NavigationLink(destination: CustomModelServiceView()) {
-                    Label("自定义模型服务", systemImage: "wrench.and.screwdriver")
-                }
-            } else {
+            NavigationLink(destination: CustomModelServiceView()) {
                 HStack {
-                    Label("自定义模型服务", systemImage: "lock.fill")
+                    Label("自定义模型服务", systemImage: account.isPro ? "wrench.and.screwdriver" : "lock.fill")
                     Spacer()
-                    Text("Orbit Pro")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                    if !account.isPro { Text("Orbit Pro").font(.caption.bold()).foregroundStyle(.secondary) }
                 }
             }
         } header: {
@@ -208,6 +177,8 @@ struct AppSettingsScreen: View {
 /// BYOK 高级页：服务商选择 + Key 配置 + 连接测试。
 struct CustomModelServiceView: View {
     @EnvironmentObject private var settings: LLMSettings
+    @ObservedObject private var account = AccountStore.shared
+    @State private var showPurchaseUnavailable = false
 
     /// 供 Picker 显示的 BYOK 服务商（不含 Orbit 云端）。
     private var byokProviders: [LLMProvider] {
@@ -217,13 +188,23 @@ struct CustomModelServiceView: View {
     var body: some View {
         Form {
             Section {
+                if !account.isPro {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("自定义模型服务为 Orbit Pro 专属功能", systemImage: "lock.fill")
+                            .foregroundStyle(orbitAccent())
+                        Text("你可以查看支持的服务商和配置方式；购买 Orbit Pro 后才可填写 API Key、测试连接、保存并启用自定义模型。")
+                            .font(.footnote).foregroundStyle(.secondary)
+                        Button("了解 Orbit Pro 永久版") { showPurchaseUnavailable = true }
+                            .font(.subheadline.weight(.semibold))
+                    }
+                }
                 Picker("识别服务商", selection: $settings.activeProviderId) {
                     ForEach(byokProviders, id: \.id) { provider in
                         Text(provider.name).tag(provider.id)
                     }
-                }
-                if let active = byokProviders.first(where: { $0.id == settings.activeProviderId }) {
-                    ProviderConfigView(provider: active)
+                }.disabled(!account.isPro)
+                if let active = byokProviders.first(where: { $0.id == settings.activeProviderId }) ?? byokProviders.first {
+                    ProviderConfigView(provider: active, isEditable: account.isPro)
                 }
                 Button {
                     settings.activeProviderId = "orbit-cloud"
@@ -239,5 +220,14 @@ struct CustomModelServiceView: View {
         .navigationTitle("自定义模型服务")
         .navigationBarTitleDisplayMode(.inline)
         .tint(orbitAccent())
+        .alert("Orbit Pro 商品待配置", isPresented: $showPurchaseUnavailable) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("永久买断商品尚未配置 App Store Connect Product ID；配置完成后可在这里发起购买。")
+        }
+        .task {
+            // entitlement 由账号服务端返回；不以本地开关作为购买依据。
+            await account.refreshEntitlement()
+        }
     }
 }

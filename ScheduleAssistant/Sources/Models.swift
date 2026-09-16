@@ -348,7 +348,13 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(visibleCalendarIds, forKey: kVisibleCalendars) }
     }
     @Published var theme: OrbitThemePreset {
-        didSet { UserDefaults.standard.set(theme.rawValue, forKey: kTheme) }
+        didSet {
+            UserDefaults.standard.set(theme.rawValue, forKey: kTheme)
+            // 主题与主屏图标是一组体验：不要只更新设置页预览。
+            let icon = IconService.iconName(for: theme)
+            alternateIcon = icon
+            IconService.apply(icon)
+        }
     }
     @Published var onboardingCompleted: Bool {
         didSet { UserDefaults.standard.set(onboardingCompleted, forKey: kOnboarding) }

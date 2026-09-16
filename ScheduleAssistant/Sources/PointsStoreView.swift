@@ -1,6 +1,80 @@
 import SwiftUI
 import StoreKit
 
+/// 左侧「我的」中唯一的积分入口。账本来自服务端 quota_ops，而非客户端余额推断。
+struct MyPointsCenterView: View {
+    @ObservedObject private var account = AccountStore.shared
+
+    var body: some View {
+        List {
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("当前积分余额").font(.subheadline).foregroundStyle(.secondary)
+                        Text(account.points.map { "\($0) 积分" } ?? "—")
+                            .font(.largeTitle.bold().monospacedDigit())
+                            .foregroundStyle(orbitAccent())
+                    }
+                    Spacer()
+                    Image(systemName: "sparkles").font(.title).foregroundStyle(orbitAccent())
+                }
+                NavigationLink(destination: PointsStoreView()) {
+                    Label("充值 · 积分商店", systemImage: "cart.circle.fill")
+                        .foregroundStyle(orbitAccent())
+                }
+            }
+
+            Section("积分明细") {
+                if account.isFetchingLedger {
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                } else if account.pointsLedger.isEmpty {
+                    Text("暂无积分明细")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(account.pointsLedger) { entry in
+                        ledgerRow(entry)
+                    }
+                }
+            } footer: {
+                Text("积分流水由 Orbit 云端账本记录，按时间倒序展示。")
+            }
+        }
+        .navigationTitle("我的积分")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(orbitAccent())
+        .task {
+            await account.refreshPoints()
+            await account.refreshPointsLedger()
+        }
+    }
+
+    private func ledgerRow(_ entry: OrbitAPIClient.PointsLedgerEntry) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: entry.delta_points >= 0 ? "plus.circle.fill" : "minus.circle.fill")
+                .foregroundStyle(entry.delta_points >= 0 ? orbitAccent() : .secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(ledgerReason(entry)).font(.body)
+                Text(entry.created_at.replacingOccurrences(of: "T", with: " "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(entry.delta_points >= 0 ? "+\(entry.delta_points)" : "\(entry.delta_points)")
+                    .font(.headline.monospacedDigit()).foregroundStyle(entry.delta_points >= 0 ? orbitAccent() : .primary)
+                Text("余额 \(entry.balance_after)").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func ledgerReason(_ entry: OrbitAPIClient.PointsLedgerEntry) -> String {
+        if entry.reason.hasPrefix("iap:") { return "购买积分包" }
+        if entry.reason.hasPrefix("refund:") { return "积分包退款" }
+        if entry.reason.contains("admin:grant") { return "系统赠送 / 调整" }
+        if entry.reason.contains("usage:") { return "Orbit 云端 AI 使用" }
+        return entry.reason
+    }
+}
+
 /// 积分商店：积分包购买（消耗型）、恢复购买与客服入口（苹果审核要求可见）。
 /// 余额只展示后端数据，客户端不做本地记账。
 struct PointsStoreView: View {

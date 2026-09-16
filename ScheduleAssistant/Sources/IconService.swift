@@ -19,6 +19,19 @@ enum IconService {
         .init(name: "OrbitMono", title: "月岩", color1: Color(red: 0.09, green: 0.12, blue: 0.18), color2: Color(red: 0.58, green: 0.64, blue: 0.72)),
     ]
 
+    /// 每种主题对应一个已在 Info.plist 注册的完整桌面图标。
+    /// 不能把 SwiftUI 的色块预览误当作 App Icon。
+    static func iconName(for theme: OrbitThemePreset) -> String {
+        switch theme {
+        case .blue: return "AppIcon"
+        case .yellow: return "OrbitOrange"
+        case .purple: return "OrbitViolet"
+        case .lightGreen: return "OrbitGreen"
+        case .deepGreen: return "OrbitGreen"
+        case .navy: return "OrbitMono"
+        }
+    }
+
     /// 切换图标；name == "AppIcon" 表示恢复主图标
     static func apply(_ name: String) {
         let target = name == "AppIcon" ? nil : name

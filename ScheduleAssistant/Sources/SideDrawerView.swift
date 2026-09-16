@@ -76,7 +76,7 @@ struct SideDrawerView: View {
                     }
                 }
             }
-            NavigationLink(destination: PointsStoreView()) {
+            NavigationLink(destination: MyPointsCenterView()) {
                 HStack {
                     Label("积分余额", systemImage: "sparkles")
                         .foregroundStyle(orbitAccent())
@@ -94,7 +94,7 @@ struct SideDrawerView: View {
                 Label("当前模型", systemImage: "brain.head.profile")
                 Spacer()
                 Text(settings.activeProvider.isCloudService
-                     ? (account.cloudModel.isEmpty ? "Orbit 云端模型" : account.cloudModel)
+                     ? "Orbit 云端"
                      : settings.activeProvider.name)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
@@ -123,9 +123,7 @@ struct SideDrawerView: View {
                     .foregroundStyle(.secondary)
                 HStack(spacing: 18) {
                     ForEach(OrbitThemePreset.allCases) { preset in
-                        Button {
-                            app.theme = preset
-                        } label: {
+                        Button { app.theme = preset } label: {
                             Circle()
                                 .fill(preset.accent)
                                 .frame(width: 30, height: 30)
@@ -158,19 +156,16 @@ struct SideDrawerView: View {
         }
     }
 
-    /// Logo 选择只展示图标，不再额外显示容易造成误解的颜色文字。
+    /// 展示项目中实际注册的完整桌面图标资源，而不是 SwiftUI 临时画的色块。
     private var logoRow: some View {
         HStack(spacing: 17) {
             ForEach(OrbitThemePreset.allCases) { preset in
                 Button { app.theme = preset } label: {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(LinearGradient(colors: [preset.accent, preset.accent.opacity(0.55)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    IconService.previewImage(named: IconService.iconName(for: preset))
+                        .resizable()
+                        .scaledToFit()
                         .frame(width: 45, height: 45)
-                        .overlay {
-                            Ellipse().stroke(.white, lineWidth: 2.5)
-                                .frame(width: 25, height: 13)
-                                .rotationEffect(.degrees(-43))
-                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         .overlay {
                             if preset == app.theme {
                                 Image(systemName: "checkmark")
@@ -192,29 +187,15 @@ struct SideDrawerView: View {
             HStack {
                 Text("默认日历")
                 Spacer()
-                Menu {
-                    Button("未选择") { app.defaultCalendarId = nil }
-                    ForEach(calendarSources, id: \.sourceIdentifier) { source in
-                        Menu(source.title) {
-                            ForEach(calendars(for: source), id: \.calendarIdentifier) { calendar in
-                                Button {
-                                    app.defaultCalendarId = calendar.calendarIdentifier
-                                } label: {
-                                    if app.defaultCalendarId == calendar.calendarIdentifier {
-                                        Label(calendar.title, systemImage: "checkmark")
-                                    } else {
-                                        Text(calendar.title)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(app.defaultCalendarId.flatMap(CalendarService.shared.calendarTitle) ?? "未选择")
-                            .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down").font(.caption2)
-                    }
+                CalendarGroupedMenu(
+                    calendars: CalendarService.shared.availableCalendars(),
+                    selectedIDs: Set(app.defaultCalendarId.map { [$0] } ?? []),
+                    allowsNone: true,
+                    onNone: { app.defaultCalendarId = nil },
+                    onTap: { app.defaultCalendarId = $0 }
+                ) {
+                    Text(app.defaultCalendarId.flatMap(CalendarService.shared.calendarTitle) ?? "未选择")
+                        .lineLimit(1)
                 }
             }
             Picker("默认提醒", selection: $app.defaultReminderMinutes) {
@@ -232,18 +213,6 @@ struct SideDrawerView: View {
         }
     }
 
-    private var calendarSources: [EKSource] {
-        Dictionary(grouping: CalendarService.shared.availableCalendars(), by: { $0.source.sourceIdentifier })
-            .values.compactMap { $0.first?.source }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-    }
-
-    private func calendars(for source: EKSource) -> [EKCalendar] {
-        CalendarService.shared.availableCalendars()
-            .filter { $0.source.sourceIdentifier == source.sourceIdentifier }
-            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
-    }
-
     /// 默认设置中的第 5 行：用一个下拉菜单完成多日历读取范围选择。
     @ViewBuilder
     private var readCalendarsRow: some View {
@@ -256,37 +225,16 @@ struct SideDrawerView: View {
                 Text("未读取到日历")
                     .foregroundStyle(.secondary)
             } else {
-                Menu {
-                    Button {
-                        app.visibleCalendarIds = nil
-                    } label: {
-                        if app.visibleCalendarIds == nil {
-                            Label("全部日历", systemImage: "checkmark")
-                        } else {
-                            Text("全部日历")
-                        }
-                    }
-                    Divider()
-                    ForEach(calendars, id: \.calendarIdentifier) { calendar in
-                        Button {
-                            toggleReadableCalendar(calendar.calendarIdentifier, calendars: calendars)
-                        } label: {
-                            if isCalendarReadable(calendar.calendarIdentifier) {
-                                Label(CalendarService.shared.calendarDisplayName(calendar), systemImage: "checkmark")
-                            } else {
-                                Text(CalendarService.shared.calendarDisplayName(calendar))
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Text(readCalendarSummary(calendars))
-                            .foregroundStyle(orbitAccent())
-                            .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
+                CalendarGroupedMenu(
+                    calendars: calendars,
+                    selectedIDs: Set(app.visibleCalendarIds ?? calendars.map(\.calendarIdentifier)),
+                    allowsNone: true,
+                    onNone: { app.visibleCalendarIds = nil },
+                    onTap: { toggleReadableCalendar($0, calendars: calendars) }
+                ) {
+                    Text(readCalendarSummary(calendars))
+                        .foregroundStyle(orbitAccent())
+                        .lineLimit(1)
                 }
             }
         }
@@ -477,4 +425,56 @@ struct SideDrawerView: View {
         }
     }
 
+}
+
+/// 默认写入与日历读取共用的一层分组菜单：账户是不可点击的标题，日历在同一菜单中缩进显示。
+private struct CalendarGroupedMenu<Label: View>: View {
+    private struct CalendarGroup: Identifiable {
+        let name: String
+        let calendars: [EKCalendar]
+        var id: String { name }
+    }
+    let calendars: [EKCalendar]
+    let selectedIDs: Set<String>
+    let allowsNone: Bool
+    let onNone: () -> Void
+    let onTap: (String) -> Void
+    @ViewBuilder let label: () -> Label
+
+    private var groups: [CalendarGroup] {
+        Dictionary(grouping: calendars, by: { $0.source.title })
+            .map { CalendarGroup(name: $0.key, calendars: $0.value.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }) }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    var body: some View {
+        Menu {
+            if allowsNone {
+                Button("全部日历") { onNone() }
+                Divider()
+            }
+            ForEach(groups) { group in
+                Text(group.name).font(.headline).disabled(true)
+                ForEach(group.calendars, id: \.calendarIdentifier) { calendar in
+                    Button {
+                        onTap(calendar.calendarIdentifier)
+                    } label: {
+                        if selectedIDs.contains(calendar.calendarIdentifier) {
+                            Label("    \(calendar.title)", systemImage: "checkmark")
+                        } else {
+                            Text("    \(calendar.title)")
+                        }
+                    }
+                }
+                Divider()
+            }
+        } label: {
+            HStack(spacing: 5) {
+                label()
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
 }

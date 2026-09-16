@@ -92,6 +92,27 @@ enum OrbitAPIClient {
         let points: Int
     }
 
+    struct MeResponse: Codable {
+        let id: Int
+        let username: String
+        let role: String
+        let is_pro: Bool?
+    }
+
+    struct PointsLedgerResponse: Codable {
+        let wallet: String
+        let entries: [PointsLedgerEntry]
+    }
+
+    struct PointsLedgerEntry: Codable, Identifiable {
+        let id: Int
+        let delta_points: Int
+        let reason: String
+        let product_id: String?
+        let balance_after: Int
+        let created_at: String
+    }
+
     struct APIKeyResponse: Codable {
         let api_key: String
         let base_url: String
@@ -171,6 +192,8 @@ enum OrbitAPIClient {
             return try JSONSerialization.data(withJSONObject: ["token": "mock-token", "user": user])
         case "/api/me/points":
             return try JSONSerialization.data(withJSONObject: ["wallet": "ios", "points": MockState.points])
+        case "/api/me/points/ledger":
+            return try JSONSerialization.data(withJSONObject: ["wallet": "ios", "entries": []])
         case "/api/me/api-key":
             let payload: [String: Any] = [
                 "api_key": "sk-mock-000000000000",

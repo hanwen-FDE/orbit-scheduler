@@ -30,6 +30,32 @@ router.get('/points', asyncHandler(async (req, res) => {
   res.json({ wallet: 'ios', points });
 }));
 
+// GET /api/me/points/ledger —— 用户自己的不可变积分账本。余额来自写入当时的
+// OneAPI 配额快照，绝不由当前余额反推历史。
+router.get('/points/ledger', asyncHandler(async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 200);
+  const rows = require('../db').prepare(
+    `SELECT q.id, q.delta_points, q.reason, q.created_at, q.oneapi_quota_after,
+            o.product_id
+       FROM quota_ops q
+       LEFT JOIN iap_orders o ON o.id = q.order_id
+      WHERE q.user_id = ? AND q.wallet = 'ios'
+      ORDER BY q.created_at DESC, q.id DESC
+      LIMIT ?`
+  ).all(req.user.id, limit);
+  res.json({
+    wallet: 'ios',
+    entries: rows.map((row) => ({
+      id: row.id,
+      delta_points: Number(row.delta_points),
+      reason: row.reason,
+      product_id: row.product_id || null,
+      balance_after: Math.trunc(Number(row.oneapi_quota_after || 0) / config.oneapi.quotaPerPoint),
+      created_at: row.created_at,
+    })),
+  });
+}));
+
 // POST /api/me/api-key —— 领取对话令牌和对话地址
 // iOS 端拿到后：POST {base_url}/v1/chat/completions
 //   Authorization: Bearer <api_key>，body 里 model 填配置的模型，支持 stream
